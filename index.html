@@ -80,6 +80,10 @@ html[data-theme="dark"] #map.tile-dark .leaflet-tile{filter:invert(1) hue-rotate
 .fab{width:48px;height:48px;border-radius:15px;box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;color:var(--ink)}
 .fab.primary{background:var(--pri-bg);color:var(--pri-fg);width:56px;height:56px;border-radius:17px;border:none}
 #demoBanner{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(92px + var(--safe-b));z-index:20;background:var(--amber);color:#4A3200;font-size:12px;font-weight:900;border-radius:999px;padding:6px 16px;box-shadow:var(--shadow);display:none;white-space:nowrap}
+#legend{position:fixed;left:12px;bottom:calc(126px + var(--safe-b));z-index:19;border-radius:12px;padding:7px 12px;box-shadow:var(--shadow);font-size:10.5px;font-weight:600;display:flex;gap:9px;align-items:center;flex-wrap:wrap;max-width:70%}
+#legend b{font-size:10px;color:var(--sub);letter-spacing:.06em}
+#legend span{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+#legend i{width:9px;height:9px;border-radius:50%;display:inline-block}
 
 /* ===== マーカー ===== */
 .mk{position:relative;display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 5px 10px rgba(16,24,40,.35))}
@@ -305,11 +309,12 @@ html[data-theme="dark"] .rolebadge{background:#3A2F1A}
 
 <!-- マップ上ボタン -->
 <div class="mapbtns">
-  <button class="fab glass" id="tileBtn" title="地図切替" onclick="cycleTile()"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m4 12.8 8 4.5 8-4.5"/><path d="m4 16.6 8 4.5 8-4.5"/></svg></button>
+  <button class="fab glass" id="tileBtn" title="表示設定" onclick="openMapSettings()"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m4 12.8 8 4.5 8-4.5"/><path d="m4 16.6 8 4.5 8-4.5"/></svg></button>
   <button class="fab glass" title="現在地へ" onclick="gotoMe()"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.4"/><circle cx="12" cy="12" r="8.2"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg></button>
   <button class="fab primary" title="スポット追加" onclick="addPinHere()"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
 </div>
 <div id="demoBanner">デモモード（架空データ）— 設定から本番接続できます</div>
+<div id="legend" class="glass" style="display:none"></div>
 
 <!-- 下部ナビ -->
 <div id="nav" class="glass">
@@ -412,7 +417,7 @@ html[data-theme="dark"] .rolebadge{background:#3A2F1A}
    バックエンド: Google Apps Script + スプレッドシート（Code.gs v4.0）
 ===================================================================== */
 
-const VERSION = "4.1";
+const VERSION = "5.0";
 const COLORS = ["#3D5AFE","#FF5252","#00C896","#FF9100","#7C4DFF","#00B0FF","#F50057","#607D8B"];
 const PIN_TYPES = {
   "顧客宅":{emoji:"🏠",color:"#FF6B6B"}, "店舗":{emoji:"🍽️",color:"#FF9F43"},
@@ -437,12 +442,12 @@ function consentText(){
 /* ---------- 設定 ---------- */
 let cfg = Object.assign({
   api:"", token:"", memberId:"", name:"", role:"member", color:COLORS[0],
-  demo:false, share:false, interval:30, autoOff:true, tile:1, theme:"auto", notify:false
+  demo:false, share:false, interval:30, autoOff:true, tile:1, theme:"auto", notify:false, colorMode:"type", catFilter:""
 }, JSON.parse(localStorage.getItem("mawaru_cfg")||"{}"));
 function saveCfg(){ localStorage.setItem("mawaru_cfg", JSON.stringify(cfg)); }
 
 /* ---------- 状態 ---------- */
-let state = {members:[], pins:[], visits:[], schedules:[]};
+let state = {members:[], pins:[], visits:[], schedules:[], products:[]};
 let srv = null, meInfo = null;
 let map, tileLayer, memberLayer, pinLayer, trailLayer;
 let myPos=null, myBattery=null, mySpeed=null, myHeading=null, watchId=null, pollTimer=null, chatTimer=null;
@@ -551,6 +556,7 @@ async function outboxFlush(){
    デモモード
 ===================================================================== */
 const DEMO = {center:[34.7025,135.4959], members:{}, roster:[], pins:[], visits:[], chat:[], schedules:[], audit:[], seq:500, trails:{},
+  products:[{id:"p1",name:"固定・Wi-Fi",color:"#2E5BFF",active:true},{id:"p2",name:"フォーム入力",color:"#0E9F6E",active:true},{id:"p3",name:"電気",color:"#E8890C",active:true}],
   settings:{org_name:"デモ株式会社 営業部", work_start:"09:00", work_end:"19:00", visibility:"all", retention_days:"30", consent_version:1, chat_enabled:"on"}};
 function todayStr(offset){
   const d=new Date(Date.now()+(offset||0)*86400e3);
@@ -568,7 +574,7 @@ function demoInit(){
   mk(3,"佐藤","#FF9100",0.002,-0.008,88,"member");
   mk(4,"高橋","#7C4DFF",-0.003,-0.004,17,"member");
   DEMO.roster.push({id:5,name:"新人・山田",color:"#3D5AFE",role:"member",status:"active",invite:"DEMO-CODE",joined:"",lastSeen:"",consentVer:0});
-  const P=(id,name,type,area,addr,dlat,dlng,memo,status)=>({id,name,type,area,addr,lat:DEMO.center[0]+dlat,lng:DEMO.center[1]+dlng,memo,status,photos:[],by:"デモ",ts:now-86400000});
+  const P=(id,name,type,area,addr,dlat,dlng,memo,status)=>({id,name,type,area,addr,lat:DEMO.center[0]+dlat,lng:DEMO.center[1]+dlng,memo,status,photos:[],by:"デモ",ts:now-86400000,visits:0,prods:[]});
   DEMO.pins=[
     P(11,"山本様邸","顧客宅","梅田","大阪市北区茶屋町1-x",0.0055,0.0028,"インターホンあり。夕方在宅が多い","対応中"),
     P(12,"居酒屋 とり吉","店舗","梅田","大阪市北区堂山町3-x",0.0022,0.0065,"グルぽ提案済み。店長は15時以降","再訪予定"),
@@ -579,6 +585,9 @@ function demoInit(){
     P(17,"渡辺様邸","顧客宅","梅田","大阪市北区兎我野町9-x",0.001,0.009,"強めの断り。当面訪問しない","NG"),
     P(18,"事務所（拠点）","拠点","梅田","大阪市北区梅田2-x",-0.001,0.001,"集合場所","対応中")
   ];
+  // 訪問数・導入商材のサンプル(ヒートマップ・商材色分けのデモ用)
+  const dp=(id,visits,prods)=>{ const x=DEMO.pins.find(p=>p.id===id); if(x){ x.visits=visits; x.prods=prods||[]; } };
+  dp(11,1); dp(12,2); dp(13,1); dp(14,4); dp(15,3,["p1","p3"]); dp(17,5);
   DEMO.visits=[
     {id:21,pinId:12,pinName:"居酒屋 とり吉",by:"小島",result:"再訪約束",note:"店長不在。木曜15時に再訪",ts:now-3600e3*2},
     {id:22,pinId:15,pinName:"鈴木様邸",by:"田中",result:"成約",note:"光回線＋グルぽ紹介1件",ts:now-3600e3*26},
@@ -626,7 +635,7 @@ function demoPayload(){
   return {ok:true,
     state:{members, pins:DEMO.pins, visits:DEMO.visits.slice().sort((a,b)=>b.ts-a.ts),
       chat: DEMO.settings.chat_enabled==="on"? DEMO.chat.slice(-50):[],
-      schedules: DEMO.schedules.slice()},
+      schedules: DEMO.schedules.slice(), products: DEMO.products.slice()},
     me:{id:"me",name:cfg.name||"あなた",role:"admin",color:cfg.color,needConsent:!cfg._demoConsent},
     settings:{...DEMO.settings, app_version:VERSION}};
 }
@@ -667,9 +676,28 @@ async function demoApi(p){
     }
     case "visit_add": {
       const pin=DEMO.pins.find(x=>x.id==p.pinId);
-      DEMO.visits.push({id:++DEMO.seq,pinId:p.pinId,pinName:pin?pin.name:"?",by:cfg.name||"あなた",result:p.result,note:p.note,ts:Date.now()});
-      if(pin&&p.result==="成約") pin.status="成約";
+      const prodIds=(p.products||[]).map(String);
+      DEMO.visits.push({id:++DEMO.seq,pinId:p.pinId,pinName:pin?pin.name:"?",by:cfg.name||"あなた",result:p.result,note:p.note,products:prodIds,ts:Date.now()});
+      if(pin){
+        pin.visits=(pin.visits||0)+1;
+        if(p.result==="成約"){
+          pin.status="成約";
+          pin.prods=pin.prods||[];
+          prodIds.forEach(x=>{ if(!pin.prods.includes(x)) pin.prods.push(x); });
+        }
+      }
       DEMO.schedules.forEach(s=>{ if(s.pinId==p.pinId && s.date===todayStr(0) && !s.done && (s.assignee===(cfg.name||"あなた")||!s.assignee)) s.done=true; });
+      return {ok:true};
+    }
+    case "prod_add": {
+      const id="p"+(++DEMO.seq);
+      DEMO.products.push({id,name:p.name,color:p.color||"#2E5BFF",active:true});
+      DEMO.audit.unshift({ts:Date.now(),name:cfg.name||"あなた",action:"prod_add",detail:p.name});
+      return {ok:true, id};
+    }
+    case "prod_set": {
+      const pr=DEMO.products.find(x=>String(x.id)===String(p.id));
+      if(pr){ if(p.name)pr.name=p.name; if(p.color)pr.color=p.color; if(p.active==="1")pr.active=true; if(p.active==="0")pr.active=false; }
       return {ok:true};
     }
     case "photo_add": {
@@ -779,6 +807,26 @@ function setTile(i){
   document.getElementById("map").className = t.cls;
 }
 function cycleTile(){ setTile(cfg.tile+1); toast("地図: "+TILES[cfg.tile].name); }
+function openMapSettings(){
+  const modes=[["type","種別"],["heat","訪問数"],["status","獲得状況"],["prod","導入商材"]];
+  const cats=[["","すべて"],["toc","個人宅(ToC)"],["tob","法人(ToB)"]];
+  openSheet(`
+    <div class="sh-title">地図の表示設定</div>
+    <div class="sh-sub">ピンの色分け・対象・地図の見た目を切り替えます</div>
+    <div class="field"><label>ピンの色分け</label><div class="seg">
+      ${modes.map(([v,l])=>`<button class="${cfg.colorMode===v?'act':''}" onclick="cfg.colorMode='${v}';saveCfg();renderPins();renderPinList();openMapSettings()">${l}</button>`).join("")}
+    </div></div>
+    ${cfg.colorMode==="heat"?`<div class="note" style="margin:-4px 0 10px">灰=未訪問 → 黄=1回 → 橙=2〜3回 → 赤=4回以上。回った量がひと目で分かります</div>`:""}
+    ${cfg.colorMode==="status"?`<div class="note" style="margin:-4px 0 10px">緑=成約（獲得済み）／青=対応中／橙=再訪予定／灰=未訪問／黒=NG</div>`:""}
+    ${cfg.colorMode==="prod"?`<div class="note" style="margin:-4px 0 10px">導入済み商材の色で表示（複数導入は数字バッジ）。灰=未導入。商材の追加は 設定 → 商材管理</div>`:""}
+    <div class="field"><label>表示する対象</label><div class="seg">
+      ${cats.map(([v,l])=>`<button class="${cfg.catFilter===v?'act':''}" onclick="cfg.catFilter='${v}';saveCfg();renderPins();renderPinList();openMapSettings()">${l}</button>`).join("")}
+    </div></div>
+    <div class="field"><label>地図の見た目</label><div class="seg">
+      ${TILES.map((t,i)=>`<button class="${cfg.tile===i?'act':''}" onclick="setTile(${i});openMapSettings()">${t.name}</button>`).join("")}
+    </div></div>
+    <div class="btnrow"><button class="btn pri" onclick="closeSheet()">閉じる</button></div>`);
+}
 function gotoMe(){
   if(myPos){ map.setView([myPos.lat,myPos.lng],16); }
   else navigator.geolocation.getCurrentPosition(
@@ -809,6 +857,44 @@ function stayMin(m){
   if(!m.stay || (m.spd||0)>3) return 0;
   const min = Math.floor((Date.now()-m.stay)/60000);
   return min>=5 ? min : 0;
+}
+/* ---------- 商材・カテゴリ(ToC/ToB) ---------- */
+const CAT_TOC=["顧客宅"], CAT_TOB=["店舗","取引先","拠点"];
+function matchCat(p){
+  if(!cfg.catFilter) return true;
+  if(cfg.catFilter==="toc") return !CAT_TOB.includes(p.type);   // 個人宅: 顧客宅＋見込み等
+  if(cfg.catFilter==="tob") return !CAT_TOC.includes(p.type);   // 法人: 店舗・取引先・拠点＋見込み等
+  return true;
+}
+function prodOf(id){ return (state.products||[]).find(x=>String(x.id)===String(id)); }
+function prodChipsHtml(ids, small){
+  if(!ids||!ids.length) return "";
+  return ids.map(id=>{
+    const pr=prodOf(id);
+    const nm=pr?pr.name:"不明", c=pr?pr.color:"#9AA4BC";
+    return `<span class="tag" style="background:${c}1A;color:${c};${small?"font-size:10px;":""}">●${esc(nm)}</span>`;
+  }).join("");
+}
+function heatColor(n){
+  if(!n) return "#9AA4BC";
+  if(n===1) return "#F2C14E";
+  if(n<=3) return "#F17C37";
+  return "#E5484D";
+}
+function statusColor(s){
+  return {"成約":"#0E9F6E","対応中":"#2E5BFF","再訪予定":"#E8890C","未訪問":"#9AA4BC","NG":"#56585E"}[s]||"#9AA4BC";
+}
+function pinColorFor(p){
+  const t=PIN_TYPES[p.type]||PIN_TYPES["その他"];
+  switch(cfg.colorMode){
+    case "heat": return heatColor(p.visits||0);
+    case "status": return statusColor(p.status);
+    case "prod": {
+      const pr = (p.prods&&p.prods.length)? prodOf(p.prods[0]) : null;
+      return pr? pr.color : "#9AA4BC";
+    }
+    default: return t.color;
+  }
 }
 function memberColor(memberId, name){
   const m = state.members.find(x=>String(x.id)===String(memberId));
@@ -869,16 +955,22 @@ function renderMembers(){
   document.getElementById("memCnt").textContent = state.members.length;
 }
 const pinMkMap = new Map();
+function pinBadge(p){
+  if(cfg.colorMode==="heat") return (p.visits||0)>0? `<span class="badge" style="background:#1A1B1E">${p.visits>9?"9+":p.visits}</span>` : "";
+  if(cfg.colorMode==="prod") return (p.prods&&p.prods.length>1)? `<span class="badge" style="background:#1A1B1E">${p.prods.length}</span>` : (p.status==="成約"?'<span class="badge">✓</span>':"");
+  return p.status==="成約"? '<span class="badge">✓</span>' : "";
+}
 function renderPins(){
   const seen = new Set();
   state.pins.forEach(p=>{
     if(areaFilter && p.area!==areaFilter) return;
+    if(!matchCat(p)) return;
     const t=PIN_TYPES[p.type]||PIN_TYPES["その他"];
-    const done=p.status==="成約"||p.status==="NG";
+    const done=(p.status==="成約"||p.status==="NG") && cfg.colorMode==="type";
     const rsel=routeMode&&routeSel.has(p.id);
     const html =
-      `<div class="pinmk ${done?'done':''} ${rsel?'rsel':''}" style="--c:${t.color};position:relative">
-         <div class="pinmk-ic"><span>${t.emoji}</span>${p.status==="成約"?'<span class="badge">✓</span>':''}</div>
+      `<div class="pinmk ${done?'done':''} ${rsel?'rsel':''}" style="--c:${pinColorFor(p)};position:relative">
+         <div class="pinmk-ic"><span>${t.emoji}</span>${pinBadge(p)}</div>
          <div class="pinmk-name">${esc(p.name)}</div>
        </div>`;
     const key=String(p.id);
@@ -897,14 +989,41 @@ function renderPins(){
   for(const [k,e] of pinMkMap) if(!seen.has(k)){ pinLayer.removeLayer(e.mk); pinMkMap.delete(k); }
   document.getElementById("pinCnt").textContent=state.pins.length;
   renderAreaChips();
+  renderLegend();
 }
 function renderAreaChips(){
   const areas=[...new Set(state.pins.map(p=>p.area).filter(Boolean))].sort();
   const el=document.getElementById("areaChips");
-  el.innerHTML = areas.length? [`<button class="chip glass ${!areaFilter?'act':''}" onclick="setArea('')">すべて</button>`,
-    ...areas.map(a=>`<button class="chip glass ${areaFilter===a?'act':''}" onclick="setArea('${esc(a)}')">${esc(a)} <small>${state.pins.filter(p=>p.area===a).length}</small></button>`)].join("") : "";
+  const cat = `
+    <button class="chip glass ${cfg.catFilter==='toc'?'act':''}" onclick="setCat('toc')">個人宅</button>
+    <button class="chip glass ${cfg.catFilter==='tob'?'act':''}" onclick="setCat('tob')">法人</button>
+    <span style="width:1px;background:var(--line);margin:4px 2px;flex:0 0 auto"></span>`;
+  el.innerHTML = cat + (areas.length? [`<button class="chip glass ${!areaFilter?'act':''}" onclick="setArea('')">すべて</button>`,
+    ...areas.map(a=>`<button class="chip glass ${areaFilter===a?'act':''}" onclick="setArea('${esc(a)}')">${esc(a)} <small>${state.pins.filter(p=>p.area===a).length}</small></button>`)].join("") : "");
 }
 function setArea(a){ areaFilter=a; renderPins(); renderPinList(); }
+function setCat(c){
+  cfg.catFilter = (cfg.catFilter===c)? "" : c;   // 同じチップ再タップで解除=すべて表示
+  saveCfg();
+  renderPins(); renderPinList();
+  toast(cfg.catFilter==="toc"?"個人宅マップ（ToC）を表示":cfg.catFilter==="tob"?"法人マップ（ToB）を表示":"すべて表示");
+}
+function renderLegend(){
+  const el=document.getElementById("legend");
+  if(!el) return;
+  let items=[];
+  if(cfg.colorMode==="heat"){
+    items=[["0回","#9AA4BC"],["1回","#F2C14E"],["2〜3回","#F17C37"],["4回〜","#E5484D"]];
+    el.innerHTML=`<b>訪問数</b>`+items.map(([l,c])=>`<span><i style="background:${c}"></i>${l}</span>`).join("");
+  }else if(cfg.colorMode==="status"){
+    items=[["成約","#0E9F6E"],["対応中","#2E5BFF"],["再訪","#E8890C"],["未訪問","#9AA4BC"],["NG","#56585E"]];
+    el.innerHTML=`<b>獲得状況</b>`+items.map(([l,c])=>`<span><i style="background:${c}"></i>${l}</span>`).join("");
+  }else if(cfg.colorMode==="prod"){
+    const prs=(state.products||[]).filter(x=>x.active).slice(0,5);
+    el.innerHTML=`<b>導入商材</b>`+prs.map(pr=>`<span><i style="background:${pr.color}"></i>${esc(pr.name)}</span>`).join("")+`<span><i style="background:#9AA4BC"></i>未導入</span>`;
+  }
+  el.style.display = cfg.colorMode==="type"? "none":"flex";
+}
 
 /* =====================================================================
    通信ループ
@@ -1200,7 +1319,7 @@ function statusTag(s){
 function renderPinList(){
   const el=document.getElementById("pinList"); if(!el) return;
   const q=(document.getElementById("pinSearch").value||"").toLowerCase();
-  let list=state.pins.filter(p=>!areaFilter||p.area===areaFilter);
+  let list=state.pins.filter(p=>(!areaFilter||p.area===areaFilter) && matchCat(p));
   if(q) list=list.filter(p=>(p.name+p.addr+p.memo+p.area).toLowerCase().includes(q));
   if(!list.length){ el.innerHTML=`<div class="empty"><div class="big">📌</div>スポットがありません<br>地図を長押し、または＋ボタンで追加できます</div>`; return; }
   const areas=[...new Set(list.map(p=>p.area||"未分類"))].sort();
@@ -1215,7 +1334,7 @@ function renderPinList(){
         <div style="flex:1;min-width:0">
           <div style="font-weight:900">${rsel?"✅ ":""}${esc(p.name)}</div>
           <div style="font-size:12px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:700">${esc(p.addr||"住所未登録")}</div>
-          <div style="margin-top:4px">${statusTag(p.status)}<span class="tag" style="background:var(--chipbg);color:var(--brand)">${esc(p.type)}</span></div>
+          <div style="margin-top:4px">${statusTag(p.status)}<span class="tag" style="background:var(--chipbg);color:var(--sub)">${esc(p.type)}</span>${(p.visits||0)>0?`<span class="tag" style="background:${heatColor(p.visits)}1A;color:${heatColor(p.visits)}">訪問${p.visits}回</span>`:""}${prodChipsHtml(p.prods,true)}</div>
         </div></div>`;
     }).join("");
   }).join("");
@@ -1451,8 +1570,15 @@ function renderStats(){
   const total=vs.length;
   const won=vs.filter(v=>v.result==="成約").length;
   const rate= total? Math.round(won/total*100):0;
-  const byResult={}, byMember={};
-  vs.forEach(v=>{ byResult[v.result]=(byResult[v.result]||0)+1; byMember[v.by]=(byMember[v.by]||0)+1; });
+  const byResult={}, byMember={}, byProd={}, prodColor={};
+  vs.forEach(v=>{
+    byResult[v.result]=(byResult[v.result]||0)+1;
+    byMember[v.by]=(byMember[v.by]||0)+1;
+    if(v.result==="成約") (v.products||[]).forEach(id=>{
+      const pr=prodOf(id); const nm=pr?pr.name:"不明";
+      byProd[nm]=(byProd[nm]||0)+1; prodColor[nm]=pr?pr.color:"#9AA4BC";
+    });
+  });
   const rc={"成約":"#00C896","NG":"#FF5252","不在":"#8E9BB5","在宅・面談":"#3D5AFE","再訪約束":"#FF9100","チラシ投函":"#7C4DFF","その他":"#607D8B"};
   const maxR=Math.max(1,...Object.values(byResult));
   const maxM=Math.max(1,...Object.values(byMember));
@@ -1478,6 +1604,7 @@ function renderStats(){
     </div>
     <div class="sec-label">結果の内訳</div>
     ${bars(byResult,maxR,k=>rc[k]||"#3D5AFE")||'<div class="empty" style="padding:16px">データなし</div>'}
+    ${Object.keys(byProd).length?`<div class="sec-label">商材別 成約数</div>${bars(byProd,Math.max(1,...Object.values(byProd)),k=>prodColor[k]||"#9AA4BC")}`:""}
     <div class="sec-label">メンバー別 訪問数</div>
     ${bars(byMember,maxM,k=>memberColor(null,k))||'<div class="empty" style="padding:16px">データなし</div>'}
     <div class="btnrow"><button class="btn sec" onclick="exportVisitsCsv()">CSV出力</button><button class="btn pri" onclick="closeSheet()">閉じる</button></div>`);
@@ -1575,7 +1702,8 @@ function openPinSheet(id){
   const schedInfo=sched.length? `<div class="note" style="margin-bottom:8px">予定あり: ${sched.map(s=>schedDayLabel(s.date)+(s.assignee?"("+esc(s.assignee)+")":"")).join("、")}</div>`:"";
   openSheet(`
     <div class="sh-title">${t.emoji} ${esc(p.name)}</div>
-    <div class="sh-sub">${statusTag(p.status)}<span class="tag" style="background:var(--chipbg);color:var(--brand)">${esc(p.type)}</span>${p.area?`<span class="tag" style="background:#FFF3E0;color:#E65100">📍${esc(p.area)}</span>`:""}</div>
+    <div class="sh-sub">${statusTag(p.status)}<span class="tag" style="background:var(--chipbg);color:var(--sub)">${esc(p.type)}</span>${p.area?`<span class="tag" style="background:var(--chipbg);color:var(--sub)">${esc(p.area)}</span>`:""}${(p.visits||0)>0?`<span class="tag" style="background:${heatColor(p.visits)}1A;color:${heatColor(p.visits)}">訪問${p.visits}回</span>`:""}</div>
+    ${p.prods&&p.prods.length?`<div style="margin:-6px 0 10px"><span style="font-size:11px;font-weight:700;color:var(--sub);margin-right:4px">導入済み:</span>${prodChipsHtml(p.prods)}</div>`:""}
     ${schedInfo}
     <div class="photos">${phs}<button class="addph" onclick="pickPhoto(${p.id})"><span>📷</span>写真を追加</button></div>
     <div class="kv"><b>住所</b><span>${esc(p.addr||"未登録")}</span></div>
@@ -1601,6 +1729,22 @@ function openPinSheet(id){
 
 /* ---------- スポット追加/編集 ---------- */
 let formTypeSel="顧客宅", formStatusSel="未訪問";
+let formProds=new Set();
+function prodSegHtml(segId, selSet, fnName){
+  const prs=(state.products||[]).filter(x=>x.active||selSet.has(String(x.id)));
+  if(!prs.length) return '<span style="font-size:12px;color:var(--sub)">商材が未登録です（設定 → 商材管理 から追加）</span>';
+  return prs.map(pr=>{
+    const on=selSet.has(String(pr.id));
+    return `<button class="${on?'act':''}" style="${on?`background:${pr.color};border-color:${pr.color};color:#fff`:""}" onclick="${fnName}('${pr.id}',this)">${esc(pr.name)}</button>`;
+  }).join("");
+}
+function toggleFormProd(id,btn){ toggleProdBtn(formProds,id,btn); }
+function toggleProdBtn(set,id,btn){
+  id=String(id);
+  const pr=prodOf(id);
+  if(set.has(id)){ set.delete(id); btn.classList.remove("act"); btn.style.background=""; btn.style.borderColor=""; btn.style.color=""; }
+  else{ set.add(id); btn.classList.add("act"); if(pr){ btn.style.background=pr.color; btn.style.borderColor=pr.color; btn.style.color="#fff"; } }
+}
 function addPinHere(){
   if(myPos) openPinForm(null, myPos.lat, myPos.lng);
   else { const c=map.getCenter(); openPinForm(null, c.lat, c.lng); toast("現在地が未取得のため地図の中心に追加します"); }
@@ -1609,6 +1753,7 @@ function openPinForm(id, lat, lng){
   const p = id? state.pins.find(x=>x.id==id) : null;
   formTypeSel = p? p.type : "顧客宅";
   formStatusSel = p? (p.status||"未訪問") : "未訪問";
+  formProds = new Set((p&&p.prods)? p.prods.map(String):[]);
   const la = p? p.lat : lat, ln = p? p.lng : lng;
   const areas=[...new Set(state.pins.map(x=>x.area).filter(Boolean))];
   openSheet(`
@@ -1619,6 +1764,7 @@ function openPinForm(id, lat, lng){
     <div class="field"><label>エリア（地域名で束ねる）</label><input id="f-area" list="areaList" placeholder="例: 梅田 / 福島 / 中津" value="${p?esc(p.area||""):esc(areaFilter||"")}"><datalist id="areaList">${areas.map(a=>`<option value="${esc(a)}">`).join("")}</datalist></div>
     <div class="field"><label>住所 <button style="color:var(--brand);font-weight:900;font-size:12px" onclick="revGeo(${la},${ln})">📡 自動取得</button></label><input id="f-addr" placeholder="タップで自動取得もできます" value="${p?esc(p.addr||""):""}"></div>
     <div class="field"><label>ステータス</label><div class="seg" id="f-status">${PIN_STATUS.map(s=>`<button class="${s===formStatusSel?'act':''}" onclick="selSeg('f-status','${s}');formStatusSel='${s}'">${s}</button>`).join("")}</div></div>
+    <div class="field"><label>導入済み商材（あれば・複数可）</label><div class="seg" id="f-prods">${prodSegHtml('f-prods',formProds,'toggleFormProd')}</div></div>
     <div class="field"><label>メモ（在宅時間帯・注意点など）</label><textarea id="f-memo">${p?esc(p.memo||""):""}</textarea></div>
     <div class="btnrow"><button class="btn ghost" onclick="closeSheet()">キャンセル</button>
     <button class="btn pri" onclick="savePin(${p?p.id:"null"},${la},${ln})">保存する</button></div>
@@ -1639,7 +1785,7 @@ async function savePin(id,lat,lng){
   if(!name){ toast("名前を入力してください"); return; }
   const payload={action:"pin_save", pin:{id:id||undefined, name, type:formTypeSel, area:document.getElementById("f-area").value.trim(),
     addr:document.getElementById("f-addr").value.trim(), lat, lng,
-    memo:document.getElementById("f-memo").value.trim(), status:formStatusSel}};
+    memo:document.getElementById("f-memo").value.trim(), status:formStatusSel, prods:[...formProds]}};
   closeSheet();
   try{
     await api(payload);
@@ -1658,20 +1804,29 @@ async function delPin(id){
 
 /* ---------- 訪問記録 ---------- */
 let visitResultSel="在宅・面談";
+let visitProds=new Set();
+function toggleVisitProd(id,btn){ toggleProdBtn(visitProds,id,btn); }
+function updateVisProdVis(){
+  const w=document.getElementById("f-vprodwrap");
+  if(w) w.style.display = visitResultSel==="成約" ? "" : "none";
+}
 function openVisitForm(pinId){
   const p=state.pins.find(x=>x.id==pinId); if(!p) return;
   visitResultSel="在宅・面談";
+  visitProds=new Set();
   openSheet(`
     <div class="sh-title">訪問を記録</div>
-    <div class="sh-sub">${esc(p.name)}</div>
-    <div class="field"><label>結果</label><div class="seg" id="f-vres">${VISIT_RESULTS.map(s=>`<button class="${s===visitResultSel?'act':''}" onclick="selSeg('f-vres','${s}');visitResultSel='${s}'">${s}</button>`).join("")}</div></div>
+    <div class="sh-sub">${esc(p.name)}${(p.visits||0)>0?` ・ これまで${p.visits}回訪問`:""}</div>
+    <div class="field"><label>結果</label><div class="seg" id="f-vres">${VISIT_RESULTS.map(s=>`<button class="${s===visitResultSel?'act':''}" onclick="selSeg('f-vres','${s}');visitResultSel='${s}';updateVisProdVis()">${s}</button>`).join("")}</div></div>
+    <div class="field" id="f-vprodwrap" style="display:none"><label>導入した商材（複数可）</label><div class="seg" id="f-vprods">${prodSegHtml('f-vprods',visitProds,'toggleVisitProd')}</div></div>
     <div class="field"><label>メモ</label><textarea id="f-vnote" placeholder="例: 奥様対応。木曜18時に再訪約束"></textarea></div>
     <div class="btnrow"><button class="btn ghost" onclick="openPinSheet(${p.id})">戻る</button>
     <button class="btn pri" onclick="saveVisit(${p.id})">記録する</button></div>
-    <div class="note">今日の予定に入っている訪問先なら、記録と同時に予定も✓完了になります。</div>`);
+    <div class="note">「成約」を選ぶと導入商材を記録できます。今日の予定に入っている訪問先なら、記録と同時に予定も✓完了になります。</div>`);
 }
 async function saveVisit(pinId){
   const payload={action:"visit_add", pinId, result:visitResultSel, note:document.getElementById("f-vnote").value.trim(),
+    products: visitResultSel==="成約"? [...visitProds]:[],
     lat:myPos?myPos.lat:null, lng:myPos?myPos.lng:null};
   closeSheet();
   try{
@@ -1762,6 +1917,7 @@ function renderSettings(){
   <div class="card">
     <div class="setrow"><div class="t"><b>メンバー管理</b><small>追加・QR招待・無効化・再発行</small></div><button class="iconbtn" onclick="openMemberAdmin()">開く</button></div>
     <div class="setrow"><div class="t"><b>組織設定</b><small>組織名・勤務時間帯・表示範囲・保存期間・チャット</small></div><button class="iconbtn" onclick="openOrgSettings()">開く</button></div>
+    <div class="setrow"><div class="t"><b>商材管理</b><small>取扱商材の追加・色設定・無効化（いつでも追加できます）</small></div><button class="iconbtn" onclick="openProdAdmin()">開く</button></div>
     <div class="setrow"><div class="t"><b>監査ログ</b><small>参加・削除・設定変更などの操作履歴</small></div><button class="iconbtn" onclick="openAudit()">開く</button></div>
     <div class="setrow"><div class="t"><b>データ出力（バックアップ・返還用）</b><small>スポット・訪問・メンバーをCSVで一括出力</small></div><button class="iconbtn" onclick="openDataExport()">開く</button></div>
   </div>`:""}
@@ -1857,7 +2013,7 @@ function toggleDemo(){
     srv=DEMO.settings; updateChatVisibility();
     document.getElementById("bulkBtn").style.display="";
     toast("デモモード開始（あなた＝管理者）"); }
-  else { document.getElementById("demoBanner").style.display="none"; state={members:[],pins:[],visits:[],schedules:[]}; chatMap.clear(); renderAll();
+  else { document.getElementById("demoBanner").style.display="none"; state={members:[],pins:[],visits:[],schedules:[],products:[]}; chatMap.clear(); renderAll();
     if(!cfg.token){ openSetup(); } toast("デモモード終了"); }
   startLoop(); renderSettings();
 }
@@ -1945,6 +2101,48 @@ function copyText(t){
   if(navigator.clipboard) navigator.clipboard.writeText(t).then(()=>toast("コピーしました: "+t));
   else toast(t);
 }
+function openProdAdmin(){
+  const prs = state.products||[];
+  const rows = prs.map(pr=>`
+    <div class="setrow">
+      <button title="タップで色変更" onclick="prodCycleColor('${pr.id}')" style="width:26px;height:26px;border-radius:50%;background:${pr.color};flex:0 0 auto;border:2px solid var(--line)"></button>
+      <div class="t"><b>${esc(pr.name)}</b><small>${pr.active?"有効":"無効（過去の記録は保持）"}</small></div>
+      ${pr.active?`<button class="iconbtn warn" onclick="prodSet('${pr.id}',{active:'0'})">無効化</button>`
+                 :`<button class="iconbtn" onclick="prodSet('${pr.id}',{active:'1'})">有効化</button>`}
+    </div>`).join("");
+  openSheet(`
+    <div class="sh-title">商材管理</div>
+    <div class="sh-sub">成約時に選択できる商材のマスタです。左の色丸をタップすると地図・チップの表示色が変わります</div>
+    ${rows||'<div class="empty">商材がまだありません</div>'}
+    <div class="sec-label">＋ 商材を追加</div>
+    <div class="field"><input id="pa-name" placeholder="商材名（例: 固定・Wi-Fi ／ 電気 ／ ウォーターサーバー）"></div>
+    <div class="field"><label>表示色</label><div class="colorpick" id="pa-colors">${COLORS.map((c,i)=>`<button style="background:${c}" class="${i===0?'act':''}" onclick="document.querySelectorAll('#pa-colors button').forEach(b=>b.classList.remove('act'));this.classList.add('act')" data-c="${c}"></button>`).join("")}</div></div>
+    <div class="btnrow"><button class="btn pri" onclick="prodAdd()">追加する</button></div>
+    <div class="note">無効化しても過去の成約記録・導入済み表示はそのまま残ります（新規の選択肢から消えるだけ）。名称の誤字修正等が必要な場合はスプレッドシートの「商材」シートで直接編集できます。</div>`);
+}
+async function prodAdd(){
+  const name=document.getElementById("pa-name").value.trim();
+  if(!name){ toast("商材名を入力してください"); return; }
+  const sel=document.querySelector("#pa-colors button.act");
+  const color=sel?sel.dataset.c:COLORS[0];
+  try{
+    await api({action:"prod_add", name, color});
+    toast("商材「"+name+"」を追加しました");
+    await tick(); openProdAdmin();
+  }catch(e){ toast("追加に失敗: "+e.message); }
+}
+async function prodSet(id, patch){
+  try{
+    await api(Object.assign({action:"prod_set", id}, patch));
+    await tick(); openProdAdmin();
+  }catch(e){ toast("変更に失敗: "+e.message); }
+}
+async function prodCycleColor(id){
+  const pr=prodOf(id); if(!pr) return;
+  const i=COLORS.indexOf(pr.color);
+  const next=COLORS[(i+1+COLORS.length)%COLORS.length]||COLORS[0];
+  await prodSet(id,{color:next});
+}
 function openOrgSettings(){
   const s=srv||{};
   openSheet(`
@@ -2010,7 +2208,7 @@ function auditLabel(a){
   return {join:"参加", login_fail:"認証失敗", member_add:"メンバー追加", member_disable:"無効化", member_enable:"有効化",
     member_role:"役割変更", member_reissue:"コード再発行", member_purge:"移動データ削除", member_set:"メンバー変更",
     pin_del:"スポット削除", pin_bulk:"一括取込", photo_add:"写真追加", photo_del:"写真削除", settings_set:"設定変更",
-    consent:"同意", export:"データ出力", chat_del:"チャット削除"}[a]||a;
+    consent:"同意", export:"データ出力", chat_del:"チャット削除", prod_add:"商材追加", prod_set:"商材変更"}[a]||a;
 }
 
 /* =====================================================================
