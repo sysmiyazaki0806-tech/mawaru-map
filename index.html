@@ -417,7 +417,7 @@ html[data-theme="dark"] .rolebadge{background:#3A2F1A}
    バックエンド: Google Apps Script + スプレッドシート（Code.gs v4.0）
 ===================================================================== */
 
-const VERSION = "5.0";
+const VERSION = "5.1";
 const COLORS = ["#3D5AFE","#FF5252","#00C896","#FF9100","#7C4DFF","#00B0FF","#F50057","#607D8B"];
 const PIN_TYPES = {
   "顧客宅":{emoji:"🏠",color:"#FF6B6B"}, "店舗":{emoji:"🍽️",color:"#FF9F43"},
@@ -798,6 +798,12 @@ function initMap(){
   trailLayer=L.layerGroup().addTo(map);
   map.on("contextmenu", e=>openPinForm(null, e.latlng.lat, e.latlng.lng));
   map.on("dragstart", ()=>{ followId=""; });
+  // 大量ピン時: 地図移動のたびに画面内のピンだけを描き直す
+  let mvT=null;
+  map.on("moveend zoomend", ()=>{
+    if(state.pins.length<=CULL_THRESHOLD) return;
+    clearTimeout(mvT); mvT=setTimeout(renderPins, 150);
+  });
 }
 function setTile(i){
   cfg.tile=i%TILES.length; saveCfg();
@@ -825,6 +831,7 @@ function openMapSettings(){
     <div class="field"><label>地図の見た目</label><div class="seg">
       ${TILES.map((t,i)=>`<button class="${cfg.tile===i?'act':''}" onclick="setTile(${i});openMapSettings()">${t.name}</button>`).join("")}
     </div></div>
+    <div class="note">メンバーの現在地（GPS）は、個人宅(ToC)・法人(ToB)どちらのモードでも<b>常に表示</b>されます。切替の対象は訪問先スポットのみです。</div>
     <div class="btnrow"><button class="btn pri" onclick="closeSheet()">閉じる</button></div>`);
 }
 function gotoMe(){
@@ -960,11 +967,16 @@ function pinBadge(p){
   if(cfg.colorMode==="prod") return (p.prods&&p.prods.length>1)? `<span class="badge" style="background:#1A1B1E">${p.prods.length}</span>` : (p.status==="成約"?'<span class="badge">✓</span>':"");
   return p.status==="成約"? '<span class="badge">✓</span>' : "";
 }
+const CULL_THRESHOLD = 400;   // これを超えるピン数は画面内のみ描画(飲食店リスト等の大量データ対応)
 function renderPins(){
   const seen = new Set();
-  state.pins.forEach(p=>{
-    if(areaFilter && p.area!==areaFilter) return;
-    if(!matchCat(p)) return;
+  let list = state.pins.filter(p=> (!areaFilter||p.area===areaFilter) && matchCat(p));
+  if(list.length>CULL_THRESHOLD && map){
+    const b = map.getBounds().pad(0.25);
+    list = list.filter(p=> p.lat>=b.getSouth()&&p.lat<=b.getNorth()&&p.lng>=b.getWest()&&p.lng<=b.getEast());
+    if(list.length>1200) list = list.slice(0,1200);   // 極端なズームアウト時の保険
+  }
+  list.forEach(p=>{
     const t=PIN_TYPES[p.type]||PIN_TYPES["その他"];
     const done=(p.status==="成約"||p.status==="NG") && cfg.colorMode==="type";
     const rsel=routeMode&&routeSel.has(p.id);
