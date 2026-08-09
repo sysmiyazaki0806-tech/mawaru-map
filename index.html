@@ -1,0 +1,2145 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#1A1B1E">
+<title>マワル MAP｜チーム位置共有・営業スポット地図</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://cyberjapandata.gsi.go.jp" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script src="https://unpkg.com/qrcode-generator@1.4.4/qrcode.js" crossorigin=""></script>
+<style>
+:root{
+  --brand:#2E5BFF; --brand2:#2E5BFF; --mint:#0E9F6E; --red:#E5484D; --amber:#E8890C;
+  --ink:#1A1B1E; --sub:#75767C; --line:#E6E4DE; --bg:#F3F2ED; --card:#FFFFFF; --field:#F8F7F3;
+  --chipbg:#EFEEE8;
+  --pri-bg:#1A1B1E; --pri-fg:#FFFFFF;
+  --glass:rgba(255,255,255,.9); --glassbd:rgba(26,27,30,.08);
+  --r:14px;
+  --shadow:0 1px 2px rgba(26,27,30,.06),0 16px 32px -18px rgba(26,27,30,.28);
+  --shadow-sm:0 1px 2px rgba(26,27,30,.05),0 8px 18px -14px rgba(26,27,30,.2);
+  --grad:var(--pri-bg);
+  --safe-b:env(safe-area-inset-bottom,0px);
+}
+html[data-theme="dark"]{
+  --ink:#EDEDEF; --sub:#8E9096; --line:#292B31; --bg:#101114; --card:#1A1C20; --field:#141519;
+  --chipbg:#24262C;
+  --pri-bg:#F1F0EC; --pri-fg:#141519;
+  --glass:rgba(22,24,28,.9); --glassbd:rgba(240,240,236,.09);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 16px 32px -14px rgba(0,0,0,.7);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.35),0 8px 18px -12px rgba(0,0,0,.55);
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden}
+body{font-family:"IBM Plex Sans JP",-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic UI",Meiryo,sans-serif;color:var(--ink);background:var(--bg);font-size:15px;line-height:1.65;font-weight:400;-webkit-font-smoothing:antialiased}
+.i{vertical-align:-3px;flex:0 0 auto}
+button{font-family:inherit;border:none;background:none;cursor:pointer;color:inherit;font-size:inherit;font-weight:inherit}
+input,select,textarea{font-family:inherit;font-size:16px;color:var(--ink);font-weight:500}
+b,strong{font-weight:700}
+.fab,.btn,.iconbtn,.chip,.toggle,#chatSend,.seg button{transition:transform .12s ease, box-shadow .2s, background .2s, color .2s}
+.fab:active,.btn:active,.iconbtn:active,.chip:active,#chatSend:active,.seg button:active{transform:scale(.94)}
+#map{position:fixed;inset:0;z-index:1;background:#E4E9F2}
+html[data-theme="dark"] #map{background:#0C111E}
+#map.tile-pale .leaflet-tile{filter:saturate(.82) contrast(1.02)}
+html[data-theme="dark"] #map.tile-dark .leaflet-tile{filter:invert(1) hue-rotate(180deg) brightness(.92) contrast(.86) saturate(.6)}
+.leaflet-control-attribution{font-size:10px;background:var(--glass)!important;color:var(--sub)!important;backdrop-filter:blur(8px)}
+.leaflet-control-attribution a{color:var(--sub)!important}
+
+/* ===== ガラス面 ===== */
+.glass{background:var(--glass);backdrop-filter:blur(16px) saturate(1.5);-webkit-backdrop-filter:blur(16px) saturate(1.5);border:1px solid var(--glassbd)}
+
+/* ===== ヘッダー ===== */
+#topbar{position:fixed;top:0;left:0;right:0;z-index:20;padding:calc(10px + env(safe-area-inset-top,0px)) 12px 4px;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+#topbar>*{pointer-events:auto}
+.brandrow{display:flex;align-items:center;gap:8px}
+.brand{display:flex;align-items:center;gap:9px;border-radius:999px;padding:7px 15px 7px 8px;box-shadow:var(--shadow)}
+.brand .logo{width:30px;height:30px;border-radius:9px;background:var(--pri-bg);display:flex;align-items:center;justify-content:center;color:var(--pri-fg);font-weight:700;font-size:14px}
+.brand b{font-size:14.5px;letter-spacing:.08em;font-weight:700}
+.brand small{color:var(--sub);font-size:10px;display:flex;align-items:center;gap:4px;margin-top:-3px;max-width:170px;white-space:nowrap;overflow:hidden;font-weight:700}
+.conndot{width:7px;height:7px;border-radius:50%;background:var(--mint);flex:0 0 auto}
+.conndot.bad{background:var(--red)}
+.sharebadge{margin-left:auto;display:flex;align-items:center;gap:7px;border-radius:999px;padding:9px 15px;box-shadow:var(--shadow);font-size:13px;font-weight:900}
+.sharebadge .dot{width:9px;height:9px;border-radius:50%;background:#B9C1D6}
+.sharebadge.on .dot{background:var(--mint);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 3px rgba(0,200,150,.3)}50%{box-shadow:0 0 0 7px rgba(0,200,150,.05)}}
+#areaChips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:4px}
+#areaChips::-webkit-scrollbar{display:none}
+.chip{flex:0 0 auto;border-radius:999px;padding:6px 14px;font-size:12.5px;font-weight:600;color:var(--sub);box-shadow:var(--shadow-sm)}
+.chip.act{color:var(--pri-fg);background:var(--pri-bg);border-color:transparent}
+.chip.act small{opacity:.7;color:inherit}
+
+/* ===== マップ上ボタン ===== */
+.mapbtns{position:fixed;right:12px;bottom:calc(158px + var(--safe-b));z-index:20;display:flex;flex-direction:column;gap:10px}
+.fab{width:48px;height:48px;border-radius:15px;box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;color:var(--ink)}
+.fab.primary{background:var(--pri-bg);color:var(--pri-fg);width:56px;height:56px;border-radius:17px;border:none}
+#demoBanner{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(92px + var(--safe-b));z-index:20;background:var(--amber);color:#4A3200;font-size:12px;font-weight:900;border-radius:999px;padding:6px 16px;box-shadow:var(--shadow);display:none;white-space:nowrap}
+
+/* ===== マーカー ===== */
+.mk{position:relative;display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 5px 10px rgba(16,24,40,.35))}
+.mk-av{width:44px;height:44px;border-radius:50%;background:var(--c,#3D5AFE);border:3px solid #fff;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:17px;position:relative}
+.mk.me .mk-av{outline:3px solid rgba(61,90,254,.4);animation:ring 2.4s infinite}
+@keyframes ring{0%,100%{outline-color:rgba(61,90,254,.4)}50%{outline-color:rgba(61,90,254,.08)}}
+.mk-hd{position:absolute;left:50%;top:50%;width:0;height:0;transform-origin:0 0}
+.mk-hd::after{content:"";position:absolute;left:-6px;top:-34px;border:6px solid transparent;border-bottom:10px solid var(--c,#3D5AFE)}
+.mk-name{margin-top:3px;background:var(--glass);backdrop-filter:blur(8px);border:1px solid var(--glassbd);border-radius:999px;padding:1px 9px;font-size:10.5px;font-weight:900;white-space:nowrap;color:var(--ink)}
+.mk-bat{position:absolute;top:-5px;right:-9px;background:var(--card);border-radius:999px;font-size:9px;font-weight:900;padding:1px 5px;color:var(--mint);box-shadow:var(--shadow-sm)}
+.mk-bat.low{color:var(--red)}
+.mk.stale{opacity:.55}
+.pinmk{display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 4px 8px rgba(16,24,40,.32));animation:pop .3s ease-out}
+@keyframes pop{from{transform:scale(.4) translateY(8px);opacity:0}to{transform:none;opacity:1}}
+.pinmk-ic{width:37px;height:37px;border-radius:50% 50% 50% 4px;transform:rotate(-45deg);background:var(--c,#FF6B6B);border:2.5px solid #fff;display:flex;align-items:center;justify-content:center}
+.pinmk-ic span{transform:rotate(45deg);font-size:16px}
+.pinmk-name{margin-top:4px;background:var(--glass);backdrop-filter:blur(8px);border:1px solid var(--glassbd);border-radius:999px;padding:0 8px;font-size:10px;font-weight:800;white-space:nowrap;max-width:112px;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
+.pinmk.done .pinmk-ic{background:#9AA4BC}
+.pinmk.rsel .pinmk-ic{outline:3px solid var(--amber)}
+.pinmk .badge{position:absolute;top:-6px;right:-4px;background:var(--mint);color:#fff;border-radius:50%;width:17px;height:17px;font-size:10px;display:flex;align-items:center;justify-content:center;border:2px solid #fff}
+
+/* ===== 下部ナビ ===== */
+#nav{position:fixed;left:12px;right:12px;bottom:calc(12px + var(--safe-b));z-index:30;border-radius:18px;box-shadow:var(--shadow);display:flex;padding:6px}
+#nav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 0 6px;border-radius:13px;font-size:9.5px;font-weight:600;color:var(--sub);position:relative;letter-spacing:.02em}
+#nav button .ic{display:flex;height:19px;align-items:center}
+#nav button.act{color:var(--pri-fg);background:var(--pri-bg)}
+.navbadge{position:absolute;top:2px;right:14%;background:var(--red);color:#fff;border-radius:99px;font-size:9px;min-width:16px;padding:0 4px;font-weight:700;display:none;border:2px solid var(--card)}
+
+/* ===== パネル ===== */
+.panel{position:fixed;inset:0;z-index:25;background:var(--bg);display:none;flex-direction:column;padding-top:env(safe-area-inset-top,0px)}
+.panel.open{display:flex}
+.panel-h{padding:18px 18px 10px;display:flex;align-items:center;gap:10px}
+.panel-h h2{font-size:20px;letter-spacing:.03em;font-weight:900}
+.panel-h .cnt{background:var(--chipbg);color:var(--sub);border-radius:999px;font-size:12px;font-weight:700;padding:2px 10px}
+.panel-body{flex:1;overflow-y:auto;padding:0 14px calc(100px + var(--safe-b));-webkit-overflow-scrolling:touch}
+.searchbox{margin:0 14px 10px;background:var(--card);border:1px solid var(--line);border-radius:16px;display:flex;align-items:center;padding:0 12px;box-shadow:var(--shadow-sm)}
+.searchbox input{flex:1;border:none;outline:none;background:none;padding:11px 8px;color:var(--ink)}
+.tabseg{display:flex;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:4px;margin:0 14px 12px;box-shadow:var(--shadow-sm)}
+.tabseg button{flex:1;border-radius:9px;padding:8px;font-size:13px;font-weight:600;color:var(--sub)}
+.tabseg button.act{background:var(--pri-bg);color:var(--pri-fg)}
+
+/* ===== カード ===== */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow-sm);padding:14px;margin-bottom:10px}
+.mcard{display:flex;align-items:center;gap:12px}
+.mcard .av{width:47px;height:47px;border-radius:50%;flex:0 0 auto;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:18px}
+.mcard .info{flex:1;min-width:0}
+.mcard .nm{font-weight:900;font-size:15px}
+.mcard .meta{font-size:12px;color:var(--sub);display:flex;gap:8px;flex-wrap:wrap;font-weight:700}
+.mcard .acts{display:flex;gap:6px}
+.iconbtn{background:var(--chipbg);color:var(--ink);border-radius:10px;padding:8px 11px;font-size:12px;font-weight:600;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
+.iconbtn.warn{background:#FFECEE;color:var(--red)}
+html[data-theme="dark"] .iconbtn.warn{background:#3A2028}
+.pincard{display:flex;gap:12px;align-items:flex-start;border-width:2px}
+.pincard.rsel{border-color:var(--amber)}
+.pincard .thumb{width:66px;height:66px;border-radius:16px;flex:0 0 auto;background:linear-gradient(135deg,var(--chipbg),var(--field));display:flex;align-items:center;justify-content:center;font-size:27px;overflow:hidden}
+.pincard .thumb img{width:100%;height:100%;object-fit:cover}
+.tag{display:inline-block;border-radius:7px;font-size:10.5px;font-weight:900;padding:1px 8px;margin-right:4px}
+.sec-label{font-size:11.5px;font-weight:900;color:var(--sub);margin:18px 4px 8px;letter-spacing:.1em}
+
+/* ===== 予定 ===== */
+.schrow{display:flex;align-items:center;gap:11px}
+.schk{width:26px;height:26px;border-radius:50%;border:2.5px solid #C6CEE2;flex:0 0 auto;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:900}
+.schk.on{background:var(--mint);border-color:var(--mint)}
+.schrow .t{flex:1;min-width:0}
+.schrow .t b{font-size:14.5px;font-weight:800}
+.schrow.done .t b{text-decoration:line-through;color:var(--sub)}
+.schrow .t small{display:block;font-size:11.5px;color:var(--sub);font-weight:700}
+.schrow .who{font-size:11px;font-weight:900;background:var(--chipbg);color:var(--brand);border-radius:8px;padding:2px 8px;white-space:nowrap}
+.schrow .del{color:var(--sub);font-size:15px;padding:4px}
+.overdue{color:var(--red)!important}
+
+/* ===== チャット ===== */
+#chatList{display:flex;flex-direction:column;padding-bottom:calc(168px + var(--safe-b)) !important}
+.day-sep{text-align:center;font-size:11px;color:var(--sub);margin:14px 0 6px;font-weight:900}
+.msgrow{display:flex;gap:8px;margin:5px 0;align-items:flex-end}
+.msgrow.mine{flex-direction:row-reverse}
+.msg-av{width:31px;height:31px;border-radius:50%;color:#fff;font-weight:900;display:flex;align-items:center;justify-content:center;font-size:13px;flex:0 0 auto}
+.msg-body{max-width:74%;display:flex;flex-direction:column}
+.mine .msg-body{align-items:flex-end}
+.msg-name{font-size:10.5px;color:var(--sub);margin:0 6px 1px;font-weight:800}
+.bubble{background:var(--card);border:1px solid var(--line);border-radius:14px 14px 14px 5px;padding:8px 13px;font-size:14px;box-shadow:var(--shadow-sm);word-break:break-word;white-space:pre-wrap}
+.mine .bubble{background:var(--pri-bg);color:var(--pri-fg);border:none;border-radius:14px 14px 5px 14px}
+.bubble.big{font-size:34px;padding:4px 8px;background:none;border:none;box-shadow:none}
+.msg-meta{font-size:10px;color:var(--sub);margin:2px 6px 0;display:flex;gap:8px;font-weight:700}
+.msg-meta button{color:var(--sub);font-size:10px}
+.msg-attach{margin-top:5px;background:var(--field);border:1.5px solid var(--line);border-radius:13px;padding:8px 12px;font-size:12.5px;font-weight:800;color:var(--brand);display:flex;align-items:center;gap:6px}
+.mine .msg-attach{background:rgba(128,128,128,.22);border-color:rgba(128,128,128,.4);color:inherit}
+#chatBar{position:fixed;left:12px;right:12px;bottom:calc(80px + var(--safe-b));z-index:28;border-radius:22px;box-shadow:var(--shadow);padding:9px 10px;display:none}
+#chatBar.open{display:block}
+.chat-quick{display:flex;gap:6px;margin-bottom:7px;align-items:center;overflow-x:auto;scrollbar-width:none}
+.chat-quick button{font-size:17px;background:var(--field);border-radius:11px;padding:3px 10px;border:1px solid var(--line);flex:0 0 auto}
+.chat-quick .loc{font-size:11px;font-weight:900;color:var(--brand)}
+.chat-inrow{display:flex;gap:8px;align-items:center}
+#chatInput{flex:1;border:1.5px solid var(--line);border-radius:15px;padding:10px 13px;background:var(--field);outline:none;font-size:15px}
+#chatInput:focus{border-color:var(--brand)}
+#chatSend{width:44px;height:44px;border-radius:12px;background:var(--pri-bg);color:var(--pri-fg);font-size:16px;flex:0 0 auto}
+
+/* ===== ルートバー ===== */
+#routeBar{position:fixed;left:12px;right:12px;bottom:calc(80px + var(--safe-b));z-index:28;border-radius:22px;box-shadow:var(--shadow);padding:11px 15px;display:none;align-items:center;gap:10px}
+#routeBar.open{display:flex}
+#routeBar b{color:var(--amber)}
+
+/* ===== 集計 ===== */
+.statnum{display:flex;gap:8px;margin-bottom:14px;align-items:stretch}
+.statnum>div{flex:1;background:var(--field);border:1.5px solid var(--line);border-radius:16px;padding:11px 8px;text-align:center}
+.statnum b{font-size:23px;display:block;font-weight:900}
+.statnum small{font-size:11px;color:var(--sub);font-weight:800}
+.donutwrap{display:flex;align-items:center;gap:16px;background:var(--field);border:1.5px solid var(--line);border-radius:16px;padding:14px;margin-bottom:14px}
+.donut{width:86px;height:86px;border-radius:50%;position:relative;flex:0 0 auto}
+.donut::before{content:"";position:absolute;inset:11px;border-radius:50%;background:var(--field)}
+.donut span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:900;z-index:1}
+.barrow{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:12.5px;font-weight:700}
+.barrow .lbl{width:86px;flex:0 0 auto;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.barrow .track{flex:1;background:var(--field);border-radius:99px;height:15px;overflow:hidden}
+.barrow .fill{height:100%;border-radius:99px;transition:width .5s ease}
+.barrow .val{width:30px;text-align:right;font-weight:900}
+
+/* ===== ボトムシート ===== */
+#sheetWrap{position:fixed;inset:0;z-index:40;display:none}
+#sheetWrap.open{display:block}
+#sheetBg{position:absolute;inset:0;background:rgba(10,15,28,.45);backdrop-filter:blur(2px)}
+#sheet{position:absolute;left:0;right:0;bottom:0;background:var(--card);border-radius:20px 20px 0 0;max-height:88%;display:flex;flex-direction:column;animation:up .26s cubic-bezier(.2,.9,.3,1.1);box-shadow:0 -10px 40px rgba(10,15,28,.25)}
+@keyframes up{from{transform:translateY(60px);opacity:.4}to{transform:none;opacity:1}}
+.griparea{padding:11px 0 4px;flex:0 0 auto;touch-action:none;cursor:grab}
+#sheet .grip{width:46px;height:5px;border-radius:99px;background:#CBD3E6;margin:0 auto}
+html[data-theme="dark"] #sheet .grip{background:#39445E}
+#sheetBody{overflow-y:auto;padding:8px 20px calc(26px + var(--safe-b));-webkit-overflow-scrolling:touch}
+.sh-title{font-size:19px;font-weight:900;margin-bottom:2px}
+.sh-sub{font-size:12.5px;color:var(--sub);margin-bottom:12px;font-weight:700}
+.btnrow{display:flex;gap:8px;margin:12px 0;flex-wrap:wrap}
+.btn{flex:1;min-width:90px;border-radius:12px;padding:12px;text-align:center;font-weight:700;font-size:14px}
+.btn.pri{background:var(--pri-bg);color:var(--pri-fg)}
+.btn.sec{background:var(--chipbg);color:var(--ink)}
+.btn.warn{background:#FFECEE;color:var(--red)}
+html[data-theme="dark"] .btn.warn{background:#3A2028}
+.btn.ghost{background:var(--field);color:var(--sub);border:1px solid var(--line)}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:12px;font-weight:900;color:var(--sub);margin-bottom:5px}
+.field input,.field select,.field textarea{width:100%;border:1.5px solid var(--line);border-radius:14px;padding:11px 13px;background:var(--field);outline:none}
+.field input:focus,.field textarea:focus,.field select:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(61,90,254,.12)}
+.field textarea{min-height:74px;resize:vertical}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{border:1.5px solid var(--line);border-radius:999px;padding:7px 13px;font-size:13px;font-weight:600;color:var(--sub);background:var(--card)}
+.seg button.act{border-color:transparent;color:var(--pri-fg);background:var(--pri-bg)}
+.photos{display:flex;gap:8px;overflow-x:auto;padding:4px 0;margin-bottom:6px}
+.photos img{width:112px;height:112px;object-fit:cover;border-radius:16px;flex:0 0 auto;background:var(--chipbg)}
+.photos .addph{width:112px;height:112px;border-radius:16px;border:2px dashed #C4CCE0;color:var(--sub);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex:0 0 auto;gap:4px}
+.photos .addph span{font-size:24px}
+.kv{display:flex;padding:7px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+.kv b{width:88px;flex:0 0 auto;color:var(--sub);font-weight:800}
+.colorpick{display:flex;gap:10px;flex-wrap:wrap}
+.colorpick button{width:38px;height:38px;border-radius:50%;border:3px solid transparent}
+.colorpick button.act{border-color:var(--ink)}
+.codebox{background:#1A1B1E;color:#fff;border-radius:14px;padding:18px;text-align:center;margin:10px 0}
+.codebox .code{font-family:Consolas,Menlo,monospace;font-size:27px;letter-spacing:.14em;font-weight:900}
+.codebox small{opacity:.7;font-size:11px;display:block;margin-top:4px;font-weight:700}
+.codebox img{background:#fff;border-radius:12px;padding:8px;margin-top:12px;max-width:190px}
+.vh{font-size:12.5px;padding:6px 0;border-bottom:1px solid var(--line);display:flex;gap:8px;font-weight:700}
+.vh .when{color:var(--sub);white-space:nowrap}
+
+/* ===== 設定 ===== */
+.setrow{display:flex;align-items:center;gap:12px;padding:13px 2px;border-bottom:1px solid var(--line)}
+.setrow:last-child{border-bottom:none}
+.setrow .ic2{width:34px;height:34px;border-radius:11px;background:var(--chipbg);display:flex;align-items:center;justify-content:center;font-size:16px;flex:0 0 auto}
+.setrow .t{flex:1}
+.setrow .t b{font-size:14.5px;font-weight:800}
+.setrow .t small{display:block;color:var(--sub);font-size:11.5px;line-height:1.5;font-weight:700}
+.setrow select{border:1.5px solid var(--line);border-radius:11px;padding:8px;background:var(--field);color:var(--ink)}
+.toggle{width:52px;height:30px;border-radius:99px;background:#CBD3E4;position:relative;flex:0 0 auto}
+html[data-theme="dark"] .toggle{background:#39445E}
+.toggle::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:.2s;box-shadow:0 2px 6px rgba(0,0,0,.25)}
+.toggle.on{background:var(--mint)}
+.toggle.on::after{left:25px}
+.rolebadge{border-radius:7px;font-size:10px;font-weight:900;padding:1px 7px;background:#FFF3E0;color:#E65100}
+html[data-theme="dark"] .rolebadge{background:#3A2F1A}
+.statusdot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px}
+#setup{position:fixed;inset:0;z-index:60;background:var(--bg);overflow-y:auto;display:none;padding:max(24px,env(safe-area-inset-top)) 22px calc(40px + var(--safe-b))}
+#setup.open{display:block}
+.setup-hero{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:34px 24px 28px;text-align:center;margin-bottom:14px;box-shadow:var(--shadow)}
+.setup-hero .logo{width:54px;height:54px;border-radius:16px;background:var(--pri-bg);color:var(--pri-fg);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;margin:0 auto 14px}
+.setup-hero h1{font-size:24px;letter-spacing:.14em;font-weight:700}
+.setup-hero p{font-size:12.5px;color:var(--sub);margin-top:6px;font-weight:500;letter-spacing:.04em}
+.setup-hero .rule{width:36px;height:2px;background:var(--pri-bg);margin:14px auto 0;border-radius:2px}
+.feat{display:flex;gap:10px;align-items:center;padding:8px 2px 8px 12px;font-size:13px;font-weight:500;border-left:2px solid var(--line);margin:2px 0}
+
+.consent{background:var(--card);border-radius:var(--r);padding:16px;font-size:13.5px}
+.note{font-size:11.5px;color:var(--sub);background:var(--chipbg);border-radius:12px;padding:9px 13px;margin-top:8px;font-weight:700}
+#toast{position:fixed;left:50%;transform:translateX(-50%) translateY(8px);bottom:calc(100px + var(--safe-b));z-index:70;background:rgba(13,19,34,.92);backdrop-filter:blur(8px);color:#fff;font-size:13px;font-weight:800;border-radius:16px;padding:11px 20px;opacity:0;pointer-events:none;transition:.28s cubic-bezier(.2,.9,.3,1.1);max-width:88%;text-align:center;box-shadow:var(--shadow)}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.empty{text-align:center;color:var(--sub);padding:44px 20px;font-size:13.5px;font-weight:700}
+.empty .big{width:56px;height:56px;border-radius:16px;background:var(--chipbg);display:flex;align-items:center;justify-content:center;font-size:24px;margin:0 auto 12px;filter:grayscale(.3)}
+.audititem{display:flex;gap:10px;padding:8px 2px;border-bottom:1px solid var(--line);font-size:12.5px;font-weight:600}
+.audititem .when{color:var(--sub);white-space:nowrap;flex:0 0 auto}
+#lightbox{position:fixed;inset:0;z-index:80;background:rgba(6,10,20,.94);display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px}
+#lightbox.open{display:flex}
+#lightbox img{max-width:94%;max-height:84%;border-radius:14px}
+#lightbox .lbdel{background:#FFECEE;color:var(--red);border-radius:14px;padding:10px 22px;font-weight:900;font-size:13px}
+@media(min-width:760px){
+  #nav{left:50%;right:auto;transform:translateX(-50%);width:580px}
+  .panel-body,.searchbox,.tabseg{max-width:680px;margin-left:auto;margin-right:auto;width:100%}
+  #sheet{left:50%;transform:translateX(-50%);width:580px;border-radius:28px;bottom:24px}
+  #chatBar,#routeBar{left:50%;transform:translateX(-50%);width:580px;right:auto}
+  #setup.open{display:flex;flex-direction:column;align-items:center}
+  #setup>div{width:530px}
+}
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<!-- ヘッダー -->
+<div id="topbar">
+  <div class="brandrow">
+    <div class="brand glass">
+      <div class="logo">マ</div>
+      <div><b>マワル MAP</b><small><span class="conndot" id="connDot"></span><span id="orgName">チーム位置共有・営業スポット</span></small></div>
+    </div>
+    <button class="sharebadge glass" id="shareBadge" onclick="toggleShare()"><span class="dot"></span><span id="shareTxt">共有OFF</span></button>
+  </div>
+  <div id="areaChips"></div>
+</div>
+
+<!-- マップ上ボタン -->
+<div class="mapbtns">
+  <button class="fab glass" id="tileBtn" title="地図切替" onclick="cycleTile()"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m4 12.8 8 4.5 8-4.5"/><path d="m4 16.6 8 4.5 8-4.5"/></svg></button>
+  <button class="fab glass" title="現在地へ" onclick="gotoMe()"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.4"/><circle cx="12" cy="12" r="8.2"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg></button>
+  <button class="fab primary" title="スポット追加" onclick="addPinHere()"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+</div>
+<div id="demoBanner">デモモード（架空データ）— 設定から本番接続できます</div>
+
+<!-- 下部ナビ -->
+<div id="nav" class="glass">
+  <button data-v="map" class="act" onclick="showView('map')"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6 9 4z"/><path d="M9 4v14M15 6v14"/></svg></span>地図</button>
+  <button data-v="chat" id="navChat" onclick="showView('chat')"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a7.5 7.5 0 0 1-7.5 7.5H4l1.7-3.1A7.5 7.5 0 1 1 21 11.5z"/></svg></span>チャット<span class="navbadge" id="chatBadge"></span></button>
+  <button data-v="members" onclick="showView('members')"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3 2.8-4.5 5.5-4.5s4.9 1.5 5.5 4.5"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.6c2.3.3 4 1.7 4.5 4.4"/></svg></span>メンバー</button>
+  <button data-v="pins" onclick="showView('pins')"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6.5-5.4-6.5-10a6.5 6.5 0 0 1 13 0C18.5 15.6 12 21 12 21z"/><circle cx="12" cy="10.6" r="2.3"/></svg></span>スポット</button>
+  <button data-v="visits" onclick="showView('visits')"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8.5 12.2 2.3 2.3 4.9-5"/></svg></span>予定・訪問<span class="navbadge" id="schedBadge"></span></button>
+  <button data-v="settings" onclick="showView('settings')"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.2 12a7.2 7.2 0 0 0-.1-1.2l2-1.5-1.9-3.3-2.3 1a7.2 7.2 0 0 0-2.1-1.2L14.4 3h-3.8l-.4 2.8a7.2 7.2 0 0 0-2.1 1.2l-2.3-1L3.9 9.3l2 1.5a7.2 7.2 0 0 0 0 2.4l-2 1.5 1.9 3.3 2.3-1a7.2 7.2 0 0 0 2.1 1.2l.4 2.8h3.8l.4-2.8a7.2 7.2 0 0 0 2.1-1.2l2.3 1 1.9-3.3-2-1.5c.1-.4.1-.8.1-1.2z"/></svg></span>設定</button>
+</div>
+
+<!-- チャット -->
+<div class="panel" id="p-chat">
+  <div class="panel-h"><h2>チャット</h2><span class="cnt" id="chatCnt">0</span></div>
+  <div class="panel-body" id="chatList"></div>
+</div>
+<div id="chatBar" class="glass">
+  <div class="chat-quick">
+    <button onclick="sendQuick('👍')">👍</button>
+    <button onclick="sendQuick('🙏')">🙏</button>
+    <button onclick="sendQuick('🔥')">🔥</button>
+    <button onclick="sendQuick('✅')">✅</button>
+    <button onclick="sendQuick('⚠️')">⚠️</button>
+    <button class="loc" onclick="sendMyLocation()">現在地を送る</button>
+  </div>
+  <div class="chat-inrow">
+    <input id="chatInput" placeholder="メッセージを入力…" autocomplete="off">
+    <button id="chatSend" onclick="sendChatText()">➤</button>
+  </div>
+</div>
+
+<!-- ルート作成バー -->
+<div id="routeBar" class="glass">
+  <div style="flex:1;font-size:13px;font-weight:800"><b id="routeCnt">0</b> 件選択中（最大10）<br><small style="color:var(--sub)">スポットをタップして訪問先を選択</small></div>
+  <button class="iconbtn" onclick="startRoute()">ナビ開始</button>
+  <button class="iconbtn warn" onclick="toggleRouteMode()">終了</button>
+</div>
+
+<!-- メンバー一覧 -->
+<div class="panel" id="p-members">
+  <div class="panel-h"><h2>メンバー</h2><span class="cnt" id="memCnt">0</span></div>
+  <div class="panel-body" id="memList"></div>
+</div>
+
+<!-- スポット一覧 -->
+<div class="panel" id="p-pins">
+  <div class="panel-h"><h2>スポット</h2><span class="cnt" id="pinCnt">0</span>
+    <span style="margin-left:auto;display:flex;gap:6px">
+      <button class="iconbtn" onclick="toggleRouteMode()">ルート</button>
+      <button class="iconbtn" id="pinsCsvBtn" onclick="exportPinsCsv()">CSV</button>
+      <button class="iconbtn" id="bulkBtn" style="display:none" onclick="openBulkImport()">取込</button>
+    </span></div>
+  <div class="searchbox">🔍<input id="pinSearch" placeholder="名前・住所・メモで検索" oninput="renderPinList()"></div>
+  <div class="panel-body" id="pinList"></div>
+</div>
+
+<!-- 予定・訪問ログ -->
+<div class="panel" id="p-visits">
+  <div class="panel-h"><h2>予定・訪問</h2><span class="cnt" id="visCnt">0</span>
+    <span style="margin-left:auto;display:flex;gap:6px">
+      <button class="iconbtn" onclick="openStats()">集計</button>
+      <button class="iconbtn" onclick="exportVisitsCsv()">CSV</button>
+    </span></div>
+  <div class="tabseg" id="visTabs">
+    <button id="tab-sched" class="act" onclick="setVisTab('sched')">予定</button>
+    <button id="tab-log" onclick="setVisTab('log')">訪問ログ</button>
+  </div>
+  <div class="panel-body" id="visList"></div>
+</div>
+
+<!-- 設定 -->
+<div class="panel" id="p-settings">
+  <div class="panel-h"><h2>設定</h2></div>
+  <div class="panel-body" id="setBody"></div>
+</div>
+
+<!-- ボトムシート -->
+<div id="sheetWrap"><div id="sheetBg" onclick="closeSheet()"></div>
+  <div id="sheet"><div class="griparea" id="gripArea"><div class="grip"></div></div><div id="sheetBody"></div></div>
+</div>
+
+<!-- 初回セットアップ -->
+<div id="setup"><div id="setupBody"></div></div>
+
+<!-- 写真ライトボックス -->
+<div id="lightbox"><img id="lightboxImg" alt="" onclick="closeLightbox()"><button class="lbdel" id="lbDel" style="display:none" onclick="lbDelete()">この写真を削除</button></div>
+
+<div id="toast"></div>
+<input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none">
+
+<script>
+"use strict";
+/* =====================================================================
+   マワル MAP v4.0 — チーム位置共有＋営業スポット地図＋チャット＋訪問予定
+   v4.0: デザイン全面刷新(専用フォント/ガラスUI/新マーカー/シートのドラッグ操作)
+         訪問予定(日付・担当割当→訪問記録で自動消込→予定からルート作成)
+         QRコード招待(読むだけで接続情報を自動入力) / OS共有でスポット送信
+         成約率ドーナツ / 写真削除(管理者) / 全データCSV出力 / 進行方向表示
+         1分ガイド内蔵
+   バックエンド: Google Apps Script + スプレッドシート（Code.gs v4.0）
+===================================================================== */
+
+const VERSION = "4.1";
+const COLORS = ["#3D5AFE","#FF5252","#00C896","#FF9100","#7C4DFF","#00B0FF","#F50057","#607D8B"];
+const PIN_TYPES = {
+  "顧客宅":{emoji:"🏠",color:"#FF6B6B"}, "店舗":{emoji:"🍽️",color:"#FF9F43"},
+  "見込み":{emoji:"⭐",color:"#FFC531"}, "取引先":{emoji:"🤝",color:"#00C896"},
+  "拠点":{emoji:"🏢",color:"#3D5AFE"}, "その他":{emoji:"📍",color:"#8E9BB5"}
+};
+const PIN_STATUS = ["未訪問","対応中","成約","再訪予定","NG"];
+const VISIT_RESULTS = ["在宅・面談","不在","成約","再訪約束","NG","チラシ投函","その他"];
+const PH_PLACEHOLDER = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="110" height="110"><rect width="110" height="110" rx="16" fill="#E8ECFA"/><text x="55" y="62" font-size="26" text-anchor="middle">🖼️</text></svg>');
+
+function consentText(){
+  const org = (srv&&srv.org_name) || "運用組織";
+  return `【位置情報の取り扱いについて（同意事項 v${(srv&&srv.consent_version)||1}）】
+1. 目的: ${org}の訪問業務の効率化（訪問先の割り振り・合流・進捗共有）と、外回り中の安全確認のためにのみ利用します。
+2. 取得する情報: 位置情報の共有をONにしている間の現在地・移動速度・端末バッテリー残量。
+3. 共有範囲: 同じ組織に参加している社内メンバーのみ。社外には一切共有されません。
+4. 勤務時間外: 共有OFFの間は位置情報を一切送信しません。勤務時間帯（${(srv&&srv.work_start)||"09:00"}〜${(srv&&srv.work_end)||"19:00"}）の外では自動的に送信を停止する設定が利用できます。組織が勤務時間外の位置情報を取得・閲覧することはありません。
+5. 保存期間: 移動履歴は${(srv&&srv.retention_days)||30}日、チャットは180日で自動削除されます。
+6. 権利: ご自身のデータはいつでも「設定 → 自分のデータを出力」で確認でき、共有はいつでも停止できます。停止しても業務上の不利益はありません。`;
+}
+
+/* ---------- 設定 ---------- */
+let cfg = Object.assign({
+  api:"", token:"", memberId:"", name:"", role:"member", color:COLORS[0],
+  demo:false, share:false, interval:30, autoOff:true, tile:1, theme:"auto", notify:false
+}, JSON.parse(localStorage.getItem("mawaru_cfg")||"{}"));
+function saveCfg(){ localStorage.setItem("mawaru_cfg", JSON.stringify(cfg)); }
+
+/* ---------- 状態 ---------- */
+let state = {members:[], pins:[], visits:[], schedules:[]};
+let srv = null, meInfo = null;
+let map, tileLayer, memberLayer, pinLayer, trailLayer;
+let myPos=null, myBattery=null, mySpeed=null, myHeading=null, watchId=null, pollTimer=null, chatTimer=null;
+let pauseUntil = Number(localStorage.getItem("mawaru_pause")||0);
+let areaFilter="", followId="", curView="map", visTab="sched";
+let failStreak=0;
+const photoCache = new Map();
+const notifiedPins = new Set();
+let chatMap = new Map();
+let lastChatTs = 0;
+let lastReadTs = Number(localStorage.getItem("mawaru_chatread")||0);
+let routeMode=false; const routeSel=new Set();
+let pendingJoin=null;
+
+/* ---------- QR招待リンクの受け取り (#j=...) ---------- */
+(function(){
+  const m = location.hash.match(/#j=([A-Za-z0-9+/=\-_%]+)/);
+  if(!m) return;
+  try{
+    const o = JSON.parse(decodeURIComponent(atob(m[1])));
+    if(o && o.api) pendingJoin = o;
+    history.replaceState(null, "", location.pathname + location.search);
+  }catch(e){}
+})();
+
+/* ---------- テーマ ---------- */
+function applyTheme(){
+  const mode = cfg.theme||"auto";
+  const dark = mode==="dark" || (mode==="auto" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  document.documentElement.dataset.theme = dark ? "dark" : "light";
+}
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme);
+
+/* =====================================================================
+   API 層
+===================================================================== */
+async function api(payload){
+  if (cfg.demo) return demoApi(payload);
+  if (!cfg.api) throw new Error("未接続");
+  if (payload.action!=="join") payload.token = cfg.token;
+  const ctl = new AbortController();
+  const to = setTimeout(()=>ctl.abort(), 20000);
+  let res;
+  try{
+    res = await fetch(cfg.api, {method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body: JSON.stringify(payload), signal: ctl.signal});
+  }finally{ clearTimeout(to); }
+  const j = await res.json();
+  if (j.auth===false){ onAuthLost(); throw new Error(j.error||"認証エラー"); }
+  if (!j.ok) throw new Error(j.error||"サーバーエラー");
+  return j;
+}
+function onAuthLost(){
+  cfg.token=""; saveCfg();
+  openSetup("アクセス権が無効になっています。新しい参加コードで再参加してください。");
+}
+function setConn(ok){
+  failStreak = ok? 0 : failStreak+1;
+  document.getElementById("connDot").classList.toggle("bad", failStreak>=2);
+}
+function applyServerPayload(j){
+  if(j.state){
+    state = j.state;
+    state.schedules = state.schedules||[];
+    if(Array.isArray(j.state.chat)){
+      chatMap = new Map(j.state.chat.map(m=>[String(m.id), m]));
+      j.state.chat.forEach(m=>{ lastChatTs = Math.max(lastChatTs, m.ts); });
+      onChatUpdated(false);
+    }
+    renderAll();
+  }
+  if(j.settings){
+    srv = j.settings;
+    document.getElementById("orgName").textContent = srv.org_name || "チーム位置共有";
+    updateChatVisibility();
+  }
+  if(j.me){
+    meInfo = j.me;
+    cfg.memberId=j.me.id; cfg.name=j.me.name; cfg.role=j.me.role; cfg.color=j.me.color||cfg.color; saveCfg();
+    document.getElementById("bulkBtn").style.display = cfg.role==="admin" ? "" : "none";
+    if(j.me.needConsent && !document.getElementById("sheetWrap").classList.contains("open")) openConsent();
+  }
+}
+function chatEnabled(){ return !srv || srv.chat_enabled!=="off"; }
+function updateChatVisibility(){
+  document.getElementById("navChat").style.display = chatEnabled()? "" : "none";
+  if(!chatEnabled() && curView==="chat") showView("map");
+}
+
+/* ---------- オフライン送信キュー ---------- */
+function outbox(){ return JSON.parse(localStorage.getItem("mawaru_outbox")||"[]"); }
+function outboxPush(p){ const q=outbox(); q.push(p); localStorage.setItem("mawaru_outbox", JSON.stringify(q)); }
+async function outboxFlush(){
+  let q = outbox();
+  if(!q.length) return;
+  const rest = [];
+  for(const p of q){
+    try{ await api(p); }
+    catch(e){ rest.push(p); }
+  }
+  localStorage.setItem("mawaru_outbox", JSON.stringify(rest));
+  if(q.length && !rest.length) toast("未送信だったデータを送信しました");
+}
+
+/* =====================================================================
+   デモモード
+===================================================================== */
+const DEMO = {center:[34.7025,135.4959], members:{}, roster:[], pins:[], visits:[], chat:[], schedules:[], audit:[], seq:500, trails:{},
+  settings:{org_name:"デモ株式会社 営業部", work_start:"09:00", work_end:"19:00", visibility:"all", retention_days:"30", consent_version:1, chat_enabled:"on"}};
+function todayStr(offset){
+  const d=new Date(Date.now()+(offset||0)*86400e3);
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+function demoInit(){
+  if(DEMO.roster.length) return;
+  const now = Date.now();
+  const mk=(id,name,color,dlat,dlng,bat,role)=>{
+    DEMO.roster.push({id,name,color,role,status:"active",invite:"",joined:now-86400e3*20,lastSeen:now,consentVer:1});
+    DEMO.members[id]={id,name,color,role,lat:DEMO.center[0]+dlat,lng:DEMO.center[1]+dlng,acc:12,spd:Math.round(Math.random()*4),bat,ts:now,stay:now-25*60e3};
+  };
+  mk(1,"小島","#FF5252",0.004,0.006,72,"admin");
+  mk(2,"田中","#00C896",-0.006,0.003,45,"member");
+  mk(3,"佐藤","#FF9100",0.002,-0.008,88,"member");
+  mk(4,"高橋","#7C4DFF",-0.003,-0.004,17,"member");
+  DEMO.roster.push({id:5,name:"新人・山田",color:"#3D5AFE",role:"member",status:"active",invite:"DEMO-CODE",joined:"",lastSeen:"",consentVer:0});
+  const P=(id,name,type,area,addr,dlat,dlng,memo,status)=>({id,name,type,area,addr,lat:DEMO.center[0]+dlat,lng:DEMO.center[1]+dlng,memo,status,photos:[],by:"デモ",ts:now-86400000});
+  DEMO.pins=[
+    P(11,"山本様邸","顧客宅","梅田","大阪市北区茶屋町1-x",0.0055,0.0028,"インターホンあり。夕方在宅が多い","対応中"),
+    P(12,"居酒屋 とり吉","店舗","梅田","大阪市北区堂山町3-x",0.0022,0.0065,"グルぽ提案済み。店長は15時以降","再訪予定"),
+    P(13,"カフェ ソレイユ","店舗","中津","大阪市北区中津1-x",0.009,-0.003,"IG運用中・優先度A","未訪問"),
+    P(14,"伊藤様邸","顧客宅","福島","大阪市福島区福島5-x",-0.006,-0.009,"回線切替の見込み。犬に注意","対応中"),
+    P(15,"鈴木様邸","顧客宅","福島","大阪市福島区鷺洲2-x",-0.008,-0.006,"7月に成約済み。紹介依頼済み","成約"),
+    P(16,"ラーメン 麺屋一心","店舗","中津","大阪市北区豊崎3-x",0.006,-0.006,"昼営業のみ。オーナー不定期","未訪問"),
+    P(17,"渡辺様邸","顧客宅","梅田","大阪市北区兎我野町9-x",0.001,0.009,"強めの断り。当面訪問しない","NG"),
+    P(18,"事務所（拠点）","拠点","梅田","大阪市北区梅田2-x",-0.001,0.001,"集合場所","対応中")
+  ];
+  DEMO.visits=[
+    {id:21,pinId:12,pinName:"居酒屋 とり吉",by:"小島",result:"再訪約束",note:"店長不在。木曜15時に再訪",ts:now-3600e3*2},
+    {id:22,pinId:15,pinName:"鈴木様邸",by:"田中",result:"成約",note:"光回線＋グルぽ紹介1件",ts:now-3600e3*26},
+    {id:23,pinId:11,pinName:"山本様邸",by:"佐藤",result:"不在",note:"チラシ投函済み",ts:now-3600e3*5},
+    {id:24,pinId:13,pinName:"カフェ ソレイユ",by:"小島",result:"在宅・面談",note:"店長と名刺交換。資料送付OK",ts:now-86400e3*3},
+    {id:25,pinId:14,pinName:"伊藤様邸",by:"田中",result:"再訪約束",note:"土曜午前に再訪",ts:now-86400e3*5}
+  ];
+  const meName = cfg.name||"あなた";
+  DEMO.schedules=[
+    {id:41,pinId:13,pinName:"カフェ ソレイユ",assignee:meName,date:todayStr(0),done:false,by:"小島"},
+    {id:42,pinId:16,pinName:"ラーメン 麺屋一心",assignee:meName,date:todayStr(0),done:false,by:"小島"},
+    {id:43,pinId:11,pinName:"山本様邸",assignee:"佐藤",date:todayStr(0),done:true,by:"小島"},
+    {id:44,pinId:14,pinName:"伊藤様邸",assignee:"田中",date:todayStr(1),done:false,by:"小島"}
+  ];
+  DEMO.chat=[
+    {id:31,memberId:1,name:"小島",text:"おはようございます！今日は梅田エリアから回ります",pinId:null,lat:null,lng:null,ts:now-3600e3*3},
+    {id:32,memberId:3,name:"佐藤",text:"👍",pinId:null,lat:null,lng:null,ts:now-3600e3*2.8},
+    {id:33,memberId:2,name:"田中",text:"とり吉さん、店長15時以降なら在店とのことです",pinId:12,lat:null,lng:null,ts:now-3600e3*2},
+    {id:34,memberId:1,name:"小島",text:"📍 現在地を共有",pinId:null,lat:DEMO.center[0]+0.004,lng:DEMO.center[1]+0.006,ts:now-1800e3}
+  ];
+  DEMO.audit=[
+    {ts:now-3600e3*1,name:"小島",action:"pin_del",detail:"重複スポットの削除"},
+    {ts:now-3600e3*8,name:"あなた",action:"member_add",detail:"新人・山田 (member)"},
+    {ts:now-86400e3*2,name:"あなた",action:"settings_set",detail:"retention_days=30"},
+    {ts:now-86400e3*20,name:"あなた",action:"join",detail:"初期管理者として参加"}
+  ];
+  Object.values(DEMO.members).forEach(m=>{
+    const pts=[]; let la=m.lat-0.008, ln=m.lng-0.004;
+    for(let i=0;i<40;i++){ la+=(m.lat-la)*0.08+(Math.random()-0.5)*0.0008; ln+=(m.lng-ln)*0.08+(Math.random()-0.5)*0.0008; pts.push({lat:la,lng:ln,ts:now-(40-i)*8*60e3}); }
+    DEMO.trails[m.id]=pts;
+  });
+  setInterval(()=>{
+    Object.values(DEMO.members).forEach(m=>{
+      const moving = Math.random()<0.6;
+      if(moving){ m.lat+=(Math.random()-0.5)*0.0006; m.lng+=(Math.random()-0.5)*0.0006; m.stay=Date.now(); }
+      m.spd=moving?Math.max(0,Math.round(Math.random()*6)):0; m.ts=Date.now();
+      m.bat=Math.max(5,m.bat-(Math.random()<0.1?1:0));
+      DEMO.trails[m.id].push({lat:m.lat,lng:m.lng,ts:Date.now()});
+    });
+  }, 5000);
+}
+function demoPayload(){
+  const members=Object.values(DEMO.members).map(m=>({...m}));
+  if(sharingActive()&&myPos) members.push({id:"me",name:cfg.name||"あなた",color:cfg.color,role:"admin",lat:myPos.lat,lng:myPos.lng,acc:myPos.acc,spd:mySpeed||0,bat:myBattery,ts:Date.now(),stay:null});
+  return {ok:true,
+    state:{members, pins:DEMO.pins, visits:DEMO.visits.slice().sort((a,b)=>b.ts-a.ts),
+      chat: DEMO.settings.chat_enabled==="on"? DEMO.chat.slice(-50):[],
+      schedules: DEMO.schedules.slice()},
+    me:{id:"me",name:cfg.name||"あなた",role:"admin",color:cfg.color,needConsent:!cfg._demoConsent},
+    settings:{...DEMO.settings, app_version:VERSION}};
+}
+async function demoApi(p){
+  await new Promise(r=>setTimeout(r,110));
+  switch(p.action){
+    case "join": case "state": case "loc": return demoPayload();
+    case "trail": return {ok:true, points:DEMO.trails[p.memberId]||[]};
+    case "chat_send": {
+      const m={id:++DEMO.seq,memberId:"me",name:cfg.name||"あなた",text:p.text||"",pinId:p.pinId||null,
+        lat:p.lat==null?null:p.lat, lng:p.lng==null?null:p.lng, ts:Date.now()};
+      DEMO.chat.push(m);
+      setTimeout(()=>{
+        const replies=["了解です！","👍","ナイスです🔥","こちらも順調です"];
+        DEMO.chat.push({id:++DEMO.seq,memberId:1,name:"小島",text:replies[Math.floor(Math.random()*replies.length)],pinId:null,lat:null,lng:null,ts:Date.now()});
+      }, 2500);
+      return {ok:true, id:m.id};
+    }
+    case "chat_list": return {ok:true, messages:DEMO.chat.filter(m=>m.ts>(Number(p.since)||0)).slice(-100)};
+    case "chat_del": DEMO.chat=DEMO.chat.filter(m=>m.id!=p.id); return {ok:true};
+    case "sched_add": {
+      const pin=DEMO.pins.find(x=>x.id==p.pinId);
+      DEMO.schedules.push({id:++DEMO.seq,pinId:p.pinId,pinName:pin?pin.name:"?",assignee:p.assignee||"",date:p.date,done:false,by:cfg.name||"あなた"});
+      return {ok:true};
+    }
+    case "sched_done": { const s=DEMO.schedules.find(x=>x.id==p.id); if(s) s.done=!!p.done; return {ok:true}; }
+    case "sched_del": DEMO.schedules=DEMO.schedules.filter(x=>x.id!=p.id); return {ok:true};
+    case "pin_save":
+      if(p.pin.id){ const i=DEMO.pins.findIndex(x=>x.id==p.pin.id); if(i>=0) DEMO.pins[i]=Object.assign(DEMO.pins[i],p.pin); return {ok:true,id:p.pin.id}; }
+      p.pin.id=++DEMO.seq; p.pin.photos=[]; p.pin.ts=Date.now(); p.pin.by=cfg.name||"あなた"; DEMO.pins.push(p.pin); return {ok:true,id:p.pin.id};
+    case "pin_del":
+      DEMO.audit.unshift({ts:Date.now(),name:cfg.name||"あなた",action:"pin_del",detail:String(p.id)});
+      DEMO.pins=DEMO.pins.filter(x=>x.id!=p.id); return {ok:true};
+    case "pin_bulk": {
+      let n=0;
+      (p.pins||[]).forEach(q=>{ if(q.name&&q.lat!=null){ DEMO.pins.push({id:++DEMO.seq,name:q.name,type:q.type||"店舗",area:q.area||"",addr:q.addr||"",lat:q.lat,lng:q.lng,memo:q.memo||"",status:"未訪問",photos:[],by:cfg.name||"あなた",ts:Date.now()}); n++; } });
+      return {ok:true, added:n};
+    }
+    case "visit_add": {
+      const pin=DEMO.pins.find(x=>x.id==p.pinId);
+      DEMO.visits.push({id:++DEMO.seq,pinId:p.pinId,pinName:pin?pin.name:"?",by:cfg.name||"あなた",result:p.result,note:p.note,ts:Date.now()});
+      if(pin&&p.result==="成約") pin.status="成約";
+      DEMO.schedules.forEach(s=>{ if(s.pinId==p.pinId && s.date===todayStr(0) && !s.done && (s.assignee===(cfg.name||"あなた")||!s.assignee)) s.done=true; });
+      return {ok:true};
+    }
+    case "photo_add": {
+      const pin=DEMO.pins.find(x=>x.id==p.pinId);
+      const id="demo"+(++DEMO.seq);
+      photoCache.set(id, "data:image/jpeg;base64,"+p.data);
+      if(pin){ pin.photos=pin.photos||[]; pin.photos.push(id); }
+      return {ok:true, photoId:id};
+    }
+    case "photo_del": {
+      const pin=DEMO.pins.find(x=>x.id==p.pinId);
+      if(pin) pin.photos=(pin.photos||[]).filter(x=>x!==p.fileId);
+      return {ok:true};
+    }
+    case "photo_get": return {ok:false, error:"デモでは不要"};
+    case "consent": cfg._demoConsent=true; saveCfg(); return {ok:true};
+    case "member_list": return {ok:true, members:DEMO.roster.map(m=>({...m}))};
+    case "member_add": {
+      const code="DEMO-"+String(++DEMO.seq).slice(-4);
+      DEMO.roster.push({id:++DEMO.seq,name:p.name,color:"#3D5AFE",role:p.role||"member",status:"active",invite:code,joined:"",lastSeen:"",consentVer:0});
+      DEMO.audit.unshift({ts:Date.now(),name:cfg.name||"あなた",action:"member_add",detail:p.name});
+      return {ok:true, invite:code};
+    }
+    case "member_set": {
+      const m=DEMO.roster.find(x=>x.id==p.id);
+      if(m&&p.status) m.status=p.status;
+      if(m&&p.role) m.role=p.role;
+      return {ok:true};
+    }
+    case "member_reissue": {
+      const m=DEMO.roster.find(x=>x.id==p.id);
+      const code="DEMO-"+String(++DEMO.seq).slice(-4);
+      if(m) m.invite=code;
+      return {ok:true, invite:code};
+    }
+    case "member_purge": return {ok:true, purged:42};
+    case "member_export": case "my_export":
+      return {ok:true, data:{profile:{name:cfg.name||"あなた"},locationLogs:DEMO.trails[1]||[],visits:DEMO.visits,consents:[{version:1,ts:Date.now()}],exportedAt:new Date().toISOString()}};
+    case "settings_set": Object.assign(DEMO.settings, p.settings||{}); DEMO.audit.unshift({ts:Date.now(),name:cfg.name||"あなた",action:"settings_set",detail:JSON.stringify(p.settings)}); return {ok:true};
+    case "audit_list": return {ok:true, items:DEMO.audit.slice(0,100)};
+  }
+  return {ok:true};
+}
+
+/* =====================================================================
+   写真
+===================================================================== */
+function photoImgTag(fileId, pinId){
+  const cached = photoCache.get(fileId);
+  return `<img src="${cached||PH_PLACEHOLDER}" data-pid="${cached?"":fileId}" onclick="event.stopPropagation();if(this.src.startsWith('data:image/jpeg'))openLightbox(this.src,${pinId||"null"},'${esc(String(fileId))}')">`;
+}
+async function hydratePhotos(root){
+  const imgs = (root||document).querySelectorAll("img[data-pid]");
+  for(const img of imgs){
+    const id = img.getAttribute("data-pid");
+    if(!id) continue;
+    img.removeAttribute("data-pid");
+    if(photoCache.has(id)){ img.src=photoCache.get(id); continue; }
+    try{
+      const j = await api({action:"photo_get", fileId:id});
+      const url = "data:"+(j.mime||"image/jpeg")+";base64,"+j.data;
+      photoCache.set(id, url);
+      img.src = url;
+    }catch(e){}
+  }
+}
+let lbCtx=null;
+function openLightbox(src, pinId, fileId){
+  document.getElementById("lightboxImg").src = src;
+  lbCtx = (pinId && fileId)? {pinId, fileId} : null;
+  document.getElementById("lbDel").style.display = (lbCtx && cfg.role==="admin")? "" : "none";
+  document.getElementById("lightbox").classList.add("open");
+}
+function closeLightbox(){ document.getElementById("lightbox").classList.remove("open"); }
+async function lbDelete(){
+  if(!lbCtx) return;
+  if(!confirm("この写真を削除しますか？（削除は監査ログに記録されます）")) return;
+  try{
+    await api({action:"photo_del", pinId:lbCtx.pinId, fileId:lbCtx.fileId});
+    closeLightbox(); toast("写真を削除しました");
+    await tick(); openPinSheet(lbCtx.pinId);
+  }catch(e){ toast("削除に失敗: "+e.message); }
+}
+
+/* =====================================================================
+   地図
+===================================================================== */
+const TILES=[
+  {name:"標準", url:"https://tile.openstreetmap.org/{z}/{x}/{y}.png", attr:"© OpenStreetMap contributors", cls:"tile-dark"},
+  {name:"淡色(地理院)", url:"https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png", attr:"出典: 国土地理院タイル", cls:"tile-pale tile-dark"},
+  {name:"航空写真", url:"https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg", attr:"出典: 国土地理院", cls:""}
+];
+function initMap(){
+  map = L.map("map",{zoomControl:false, attributionControl:true}).setView([34.7025,135.4959],14);
+  setTile(cfg.tile==null?1:cfg.tile);
+  memberLayer=L.layerGroup().addTo(map);
+  pinLayer=L.layerGroup().addTo(map);
+  trailLayer=L.layerGroup().addTo(map);
+  map.on("contextmenu", e=>openPinForm(null, e.latlng.lat, e.latlng.lng));
+  map.on("dragstart", ()=>{ followId=""; });
+}
+function setTile(i){
+  cfg.tile=i%TILES.length; saveCfg();
+  if(tileLayer) map.removeLayer(tileLayer);
+  const t=TILES[cfg.tile];
+  tileLayer=L.tileLayer(t.url,{maxZoom:18,attribution:t.attr}).addTo(map);
+  document.getElementById("map").className = t.cls;
+}
+function cycleTile(){ setTile(cfg.tile+1); toast("地図: "+TILES[cfg.tile].name); }
+function gotoMe(){
+  if(myPos){ map.setView([myPos.lat,myPos.lng],16); }
+  else navigator.geolocation.getCurrentPosition(
+    p=>{ myPos={lat:p.coords.latitude,lng:p.coords.longitude,acc:p.coords.accuracy}; map.setView([myPos.lat,myPos.lng],16); },
+    ()=>toast("現在地を取得できません（位置情報の許可を確認）"));
+}
+
+/* ---------- 汎用 ---------- */
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function timeAgo(ts){
+  if(!ts) return "未共有";
+  const s=(Date.now()-ts)/1000;
+  if(s<70) return "たった今";
+  if(s<3600) return Math.floor(s/60)+"分前";
+  if(s<86400) return Math.floor(s/3600)+"時間前";
+  return Math.floor(s/86400)+"日前";
+}
+function fmtTime(ts){ return new Date(ts).toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"}); }
+function dist(a,b){
+  const R=6371e3,rad=x=>x*Math.PI/180;
+  const dl=rad(b.lat-a.lat), dn=rad(b.lng-a.lng);
+  const h=Math.sin(dl/2)**2+Math.cos(rad(a.lat))*Math.cos(rad(b.lat))*Math.sin(dn/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h));
+}
+function fmtDist(m){ return m<950? Math.round(m)+"m" : (m/1000).toFixed(1)+"km"; }
+function spdIcon(spd){ if(spd==null||spd<=2) return ""; if(spd<7) return "🚶"; if(spd<22) return "🚴"; return "🚗"; }
+function stayMin(m){
+  if(!m.stay || (m.spd||0)>3) return 0;
+  const min = Math.floor((Date.now()-m.stay)/60000);
+  return min>=5 ? min : 0;
+}
+function memberColor(memberId, name){
+  const m = state.members.find(x=>String(x.id)===String(memberId));
+  if(m && m.color) return m.color;
+  let h=0; for(const c of String(name||"")) h=(h*31+c.charCodeAt(0))>>>0;
+  return COLORS[h%COLORS.length];
+}
+function renderAll(){ renderMembers(); renderPins(); renderPinList(); renderMemList(); renderVisits(); updateSchedBadge(); }
+
+/* =====================================================================
+   マーカー（差分更新＋滑らか移動）
+===================================================================== */
+const memMk = new Map();
+function slideTo(entry, lat, lng){
+  if(entry.raf) cancelAnimationFrame(entry.raf);
+  const from = entry.mk.getLatLng();
+  if(Math.abs(from.lat-lat)<1e-7 && Math.abs(from.lng-lng)<1e-7) return;
+  const t0 = performance.now(), dur = 700;
+  const step = t=>{
+    const p = Math.min(1,(t-t0)/dur), e = 1-Math.pow(1-p,3);
+    entry.mk.setLatLng([from.lat+(lat-from.lat)*e, from.lng+(lng-from.lng)*e]);
+    if(p<1) entry.raf=requestAnimationFrame(step);
+  };
+  entry.raf=requestAnimationFrame(step);
+}
+function renderMembers(){
+  const seen = new Set();
+  state.members.forEach(m=>{
+    let lat=m.lat, lng=m.lng;
+    const isMe = String(m.id)===String(cfg.memberId||"me");
+    if(isMe && sharingActive() && myPos){ lat=myPos.lat; lng=myPos.lng; }
+    if(lat==null||lng==null) return;
+    const stale = m.ts && Date.now()-m.ts > 15*60e3;
+    const stay = stayMin(m);
+    const bat = (m.bat!=null&&m.bat!=="")? `<div class="mk-bat ${m.bat<=20?'low':''}">${m.bat}%</div>`:"";
+    const hd = (isMe && myHeading!=null && (mySpeed||0)>2)? `<div class="mk-hd" style="transform:rotate(${Math.round(myHeading)}deg)"></div>`:"";
+    const html =
+      `<div class="mk ${isMe?'me':''} ${stale?'stale':''}" style="--c:${esc(m.color||'#3D5AFE')}">
+         <div class="mk-av">${esc((m.name||"?").slice(0,1))}${bat}${hd}</div>
+         <div class="mk-name">${esc(m.name)}${stale?" ⏸":(stay>=10?" ⏱":"")}</div>
+       </div>`;
+    const key = String(m.id);
+    let e = memMk.get(key);
+    if(!e){
+      const mk = L.marker([lat,lng],{icon:L.divIcon({className:"",iconSize:[48,66],iconAnchor:[24,33],html})}).addTo(memberLayer);
+      e = {mk, html, raf:null, data:m};
+      mk.on("click",()=>openMemberSheet(e.data));
+      memMk.set(key,e);
+    }else{
+      e.data = m;
+      if(e.html!==html){ e.mk.setIcon(L.divIcon({className:"",iconSize:[48,66],iconAnchor:[24,33],html})); e.html=html; }
+      slideTo(e, lat, lng);
+    }
+    seen.add(key);
+    if(String(followId)===key) map.panTo([lat,lng]);
+  });
+  for(const [k,e] of memMk) if(!seen.has(k)){ if(e.raf)cancelAnimationFrame(e.raf); memberLayer.removeLayer(e.mk); memMk.delete(k); }
+  document.getElementById("memCnt").textContent = state.members.length;
+}
+const pinMkMap = new Map();
+function renderPins(){
+  const seen = new Set();
+  state.pins.forEach(p=>{
+    if(areaFilter && p.area!==areaFilter) return;
+    const t=PIN_TYPES[p.type]||PIN_TYPES["その他"];
+    const done=p.status==="成約"||p.status==="NG";
+    const rsel=routeMode&&routeSel.has(p.id);
+    const html =
+      `<div class="pinmk ${done?'done':''} ${rsel?'rsel':''}" style="--c:${t.color};position:relative">
+         <div class="pinmk-ic"><span>${t.emoji}</span>${p.status==="成約"?'<span class="badge">✓</span>':''}</div>
+         <div class="pinmk-name">${esc(p.name)}</div>
+       </div>`;
+    const key=String(p.id);
+    let e = pinMkMap.get(key);
+    if(!e){
+      const mk = L.marker([p.lat,p.lng],{icon:L.divIcon({className:"",iconSize:[42,60],iconAnchor:[21,44],html})}).addTo(pinLayer);
+      mk.on("click",()=>{ if(routeMode) toggleRouteSel(p.id); else openPinSheet(p.id); });
+      e={mk, html};
+      pinMkMap.set(key,e);
+    }else if(e.html!==html){
+      e.mk.setIcon(L.divIcon({className:"",iconSize:[42,60],iconAnchor:[21,44],html})); e.html=html;
+      e.mk.setLatLng([p.lat,p.lng]);
+    }
+    seen.add(key);
+  });
+  for(const [k,e] of pinMkMap) if(!seen.has(k)){ pinLayer.removeLayer(e.mk); pinMkMap.delete(k); }
+  document.getElementById("pinCnt").textContent=state.pins.length;
+  renderAreaChips();
+}
+function renderAreaChips(){
+  const areas=[...new Set(state.pins.map(p=>p.area).filter(Boolean))].sort();
+  const el=document.getElementById("areaChips");
+  el.innerHTML = areas.length? [`<button class="chip glass ${!areaFilter?'act':''}" onclick="setArea('')">すべて</button>`,
+    ...areas.map(a=>`<button class="chip glass ${areaFilter===a?'act':''}" onclick="setArea('${esc(a)}')">${esc(a)} <small>${state.pins.filter(p=>p.area===a).length}</small></button>`)].join("") : "";
+}
+function setArea(a){ areaFilter=a; renderPins(); renderPinList(); }
+
+/* =====================================================================
+   通信ループ
+===================================================================== */
+function sharingActive(){
+  if(!cfg.share) return false;
+  if(pauseUntil>Date.now()) return false;
+  if(cfg.autoOff){
+    const ws=(srv&&srv.work_start)||"09:00", we=(srv&&srv.work_end)||"19:00";
+    const now=new Date(), cur=now.getHours()*60+now.getMinutes();
+    const [sh,sm]=ws.split(":").map(Number), [eh,em]=we.split(":").map(Number);
+    if(cur < sh*60+sm || cur > eh*60+em) return false;
+  }
+  return true;
+}
+function startWatch(){
+  if(watchId!=null || !navigator.geolocation) return;
+  watchId = navigator.geolocation.watchPosition(p=>{
+    const prev=myPos;
+    myPos={lat:p.coords.latitude,lng:p.coords.longitude,acc:Math.round(p.coords.accuracy)};
+    if(p.coords.heading!=null && !isNaN(p.coords.heading)) myHeading=p.coords.heading;
+    if(p.coords.speed!=null && !isNaN(p.coords.speed)) mySpeed=Math.round(p.coords.speed*3.6);
+    else if(prev){ const dt=(Date.now()-(prev._t||Date.now()))/1000; if(dt>3) mySpeed=Math.round(dist(prev,myPos)/dt*3.6); }
+    myPos._t=Date.now();
+  }, ()=>{}, {enableHighAccuracy:true, maximumAge:10000});
+  if(navigator.getBattery) navigator.getBattery().then(b=>{
+    myBattery=Math.round(b.level*100);
+    b.addEventListener("levelchange",()=>{ myBattery=Math.round(b.level*100); });
+  });
+}
+async function tick(){
+  if(!connected()) return;
+  try{
+    await outboxFlush();
+    let j;
+    if(sharingActive() && myPos){
+      j=await api({action:"loc", lat:myPos.lat, lng:myPos.lng, acc:myPos.acc, spd:mySpeed||0, bat:myBattery});
+    }else{
+      j=await api({action:"state"});
+    }
+    applyServerPayload(j);
+    setConn(true);
+    checkNearby();
+  }catch(e){ setConn(false); }
+  updateShareBadge();
+}
+function connected(){ return cfg.demo || (cfg.api && cfg.token); }
+function startLoop(){
+  if(pollTimer) clearInterval(pollTimer);
+  tick();
+  pollTimer=setInterval(tick, Math.max(15,cfg.interval)*1000);
+}
+function toggleShare(){
+  if(!connected()){ openSetup(); return; }
+  if(meInfo && meInfo.needConsent){ openConsent(); return; }
+  cfg.share=!cfg.share; saveCfg();
+  if(cfg.share){ pauseUntil=0; localStorage.setItem("mawaru_pause","0"); startWatch(); toast("位置共有をONにしました"); }
+  else toast("位置共有をOFFにしました");
+  updateShareBadge(); tick();
+  if(document.getElementById("p-settings").classList.contains("open")) renderSettings();
+}
+function updateShareBadge(){
+  const b=document.getElementById("shareBadge"), t=document.getElementById("shareTxt");
+  const on=sharingActive();
+  b.classList.toggle("on",on);
+  if(on) t.textContent="共有中";
+  else if(cfg.share&&pauseUntil>Date.now()) t.textContent="一時停止中";
+  else if(cfg.share) t.textContent="時間外OFF";
+  else t.textContent="共有OFF";
+}
+function checkNearby(){
+  if(!myPos || !sharingActive()) return;
+  state.pins.forEach(p=>{
+    if(notifiedPins.has(p.id)) return;
+    if(p.status==="成約"||p.status==="NG") return;
+    if(dist(myPos,p) <= 120){
+      notifiedPins.add(p.id);
+      toast(`📍 近くに「${p.name}」（${p.status}）があります`);
+      if(navigator.vibrate) navigator.vibrate(200);
+      notify("訪問先が近くにあります", p.name+"（"+(p.area||p.status)+"）");
+    }
+  });
+}
+function notify(title, body){
+  if(!cfg.notify || !("Notification" in window) || Notification.permission!=="granted") return;
+  if(!document.hidden && curView!=="map") return;
+  try{ new Notification(title, {body, icon:"icon.svg"}); }catch(e){}
+}
+
+/* =====================================================================
+   チャット
+===================================================================== */
+function onChatUpdated(fromFastPoll){
+  const msgs=[...chatMap.values()].sort((a,b)=>a.ts-b.ts);
+  document.getElementById("chatCnt").textContent=msgs.length;
+  const unread = msgs.filter(m=>m.ts>lastReadTs && String(m.memberId)!==String(cfg.memberId||"me")).length;
+  const badge=document.getElementById("chatBadge");
+  if(curView==="chat"){ markChatRead(); badge.style.display="none"; }
+  else{ badge.textContent=unread>99?"99+":unread; badge.style.display=unread?"":"none"; }
+  if(curView==="chat") renderChat();
+  if(fromFastPoll===undefined) return;
+  const newest = msgs[msgs.length-1];
+  if(newest && newest.ts>lastReadTs && String(newest.memberId)!==String(cfg.memberId||"me") && curView!=="chat"){
+    notify("💬 "+newest.name, newest.text||"（位置・スポットの共有）");
+  }
+}
+function markChatRead(){
+  lastReadTs = Date.now();
+  localStorage.setItem("mawaru_chatread", String(lastReadTs));
+}
+function startChatPoll(){
+  stopChatPoll();
+  chatTimer=setInterval(async ()=>{
+    if(curView!=="chat" || !connected() || !chatEnabled()) return;
+    try{
+      const j=await api({action:"chat_list", since:lastChatTs});
+      let added=false;
+      (j.messages||[]).forEach(m=>{
+        if(!chatMap.has(String(m.id))){ chatMap.set(String(m.id),m); added=true; }
+        lastChatTs=Math.max(lastChatTs,m.ts);
+      });
+      if(added) onChatUpdated(true);
+    }catch(e){}
+  }, 5000);
+}
+function stopChatPoll(){ if(chatTimer){ clearInterval(chatTimer); chatTimer=null; } }
+function renderChat(){
+  const el=document.getElementById("chatList");
+  const msgs=[...chatMap.values()].sort((a,b)=>a.ts-b.ts);
+  if(!msgs.length){
+    el.innerHTML=`<div class="empty"><div class="big">💬</div>まだメッセージがありません<br>下の入力欄からチームに送れます</div>`;
+    return;
+  }
+  const today=new Date(); today.setHours(0,0,0,0);
+  const dayLabel=ts=>{ const d=new Date(ts); d.setHours(0,0,0,0);
+    const diff=(today-d)/86400e3;
+    return diff===0?"今日":diff===1?"昨日":(d.getMonth()+1)+"/"+d.getDate(); };
+  let cur="", html="";
+  const isNearBottom = el.scrollHeight-el.scrollTop-el.clientHeight < 160;
+  msgs.forEach(m=>{
+    const l=dayLabel(m.ts);
+    if(l!==cur){ cur=l; html+=`<div class="day-sep">${l}</div>`; }
+    const mine = String(m.memberId)===String(cfg.memberId||"me");
+    const color = memberColor(m.memberId, m.name);
+    const onlyEmoji = m.text && m.text.length<=2 && /\p{Extended_Pictographic}/u.test(m.text);
+    let attach="";
+    if(m.pinId){
+      const p=state.pins.find(x=>String(x.id)===String(m.pinId));
+      attach = p? `<div class="msg-attach" onclick="openPinSheet(${p.id})">📌 ${esc(p.name)}${p.area?`<small>(${esc(p.area)})</small>`:""}</div>`
+                : `<div class="msg-attach">📌 スポット（削除済み）</div>`;
+    }else if(m.lat!=null && m.lng!=null){
+      attach = `<div class="msg-attach" onclick="showView('map');map.setView([${m.lat},${m.lng}],16)">📍 現在地（地図で見る）</div>`;
+    }
+    const canDel = mine || cfg.role==="admin";
+    html+=`<div class="msgrow ${mine?'mine':''}">
+      ${mine?"":`<div class="msg-av" style="background:${esc(color)}">${esc((m.name||"?").slice(0,1))}</div>`}
+      <div class="msg-body">
+        ${mine?"":`<div class="msg-name">${esc(m.name)}</div>`}
+        ${m.text?`<div class="bubble ${onlyEmoji?'big':''}">${esc(m.text)}</div>`:""}
+        ${attach}
+        <div class="msg-meta">${fmtTime(m.ts)}${canDel?`<button onclick="delMsg('${esc(String(m.id))}')">削除</button>`:""}</div>
+      </div></div>`;
+  });
+  el.innerHTML=html;
+  if(isNearBottom || el.dataset.first!=="1"){ el.scrollTop=el.scrollHeight; el.dataset.first="1"; }
+}
+async function sendChat(payload){
+  payload.action="chat_send";
+  try{
+    await api(payload);
+    try{
+      const j=await api({action:"chat_list", since:lastChatTs});
+      (j.messages||[]).forEach(m=>{ chatMap.set(String(m.id),m); lastChatTs=Math.max(lastChatTs,m.ts); });
+      markChatRead(); onChatUpdated(true);
+    }catch(e){}
+  }catch(e){
+    if(/無効化|認証|未接続/.test(e.message)){ toast("送信できません: "+e.message); return; }
+    outboxPush(payload);
+    toast("圏外のため送信待ちに保存しました");
+  }
+}
+function sendChatText(){
+  const inp=document.getElementById("chatInput");
+  const text=inp.value.trim();
+  if(!text) return;
+  inp.value="";
+  sendChat({text});
+}
+function sendQuick(emoji){ sendChat({text:emoji}); }
+function sendMyLocation(){
+  if(!myPos){ toast("現在地が未取得です（位置情報の許可を確認）"); return; }
+  sendChat({text:"📍 現在地を共有", lat:myPos.lat, lng:myPos.lng});
+}
+function sharePinToChat(pinId){
+  const p=state.pins.find(x=>x.id==pinId); if(!p) return;
+  closeSheet();
+  sendChat({text:"📌 "+p.name, pinId:p.id});
+  showView("chat");
+  toast("チャットに共有しました");
+}
+async function delMsg(id){
+  if(!confirm("このメッセージを削除しますか？（削除は監査ログに記録されます）")) return;
+  try{
+    await api({action:"chat_del", id});
+    chatMap.delete(String(id));
+    onChatUpdated(true);
+  }catch(e){ toast("削除に失敗: "+e.message); }
+}
+document.getElementById("chatInput").addEventListener("keydown", e=>{
+  if(e.key==="Enter" && !e.isComposing){ e.preventDefault(); sendChatText(); }
+});
+
+/* =====================================================================
+   OS共有（LINE等へ送る）
+===================================================================== */
+async function sharePinOS(pinId){
+  const p=state.pins.find(x=>x.id==pinId); if(!p) return;
+  const text = `${p.name}\n${p.addr||""}\n地図: https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`;
+  if(navigator.share){
+    try{ await navigator.share({title:p.name, text}); }catch(e){}
+  }else{
+    copyText(text);
+    toast("この端末は共有非対応のためコピーしました");
+  }
+}
+
+/* =====================================================================
+   ビュー切替
+===================================================================== */
+function showView(v){
+  curView=v;
+  document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("act",b.dataset.v===v));
+  ["chat","members","pins","visits","settings"].forEach(x=>document.getElementById("p-"+x).classList.toggle("open",v===x));
+  document.getElementById("chatBar").classList.toggle("open", v==="chat" && chatEnabled());
+  document.getElementById("routeBar").classList.toggle("open", routeMode && (v==="pins"||v==="map"));
+  if(v==="chat"){ markChatRead(); onChatUpdated(); renderChat(); startChatPoll(); const el=document.getElementById("chatList"); el.scrollTop=el.scrollHeight; }
+  else stopChatPoll();
+  if(v==="members") renderMemList();
+  if(v==="pins") renderPinList();
+  if(v==="visits") renderVisits();
+  if(v==="settings") renderSettings();
+}
+
+/* ---------- メンバー一覧 ---------- */
+function renderMemList(){
+  const el=document.getElementById("memList"); if(!el) return;
+  if(!state.members.length){ el.innerHTML=`<div class="empty"><div class="big">👥</div>メンバーがいません<br>管理者は 設定 → メンバー管理 から追加できます</div>`; return; }
+  el.innerHTML=state.members.map(m=>{
+    const hasPos = m.lat!=null;
+    const d=(myPos&&hasPos)? fmtDist(dist(myPos,m)) : "—";
+    const move=spdIcon(m.spd);
+    const stay=stayMin(m);
+    const spd=(move)? ` ・ ${move}${m.spd}km/h` : (stay?` ・ ⏱${stay}分滞在`:"");
+    const bat=(m.bat!=null&&m.bat!=="")? `🔋${m.bat}%`:"🔋—";
+    return `<div class="card mcard">
+      <div class="av" style="background:${hasPos?esc(m.color||'#3D5AFE'):'#B8C0D4'}">${esc((m.name||"?").slice(0,1))}</div>
+      <div class="info"><div class="nm">${esc(m.name)} ${m.role==="admin"?'<span class="rolebadge">管理者</span>':''}</div>
+        <div class="meta"><span>${timeAgo(m.ts)}</span>${hasPos?`<span>${bat}${spd}</span><span>📏 ${d}</span>`:""}</div></div>
+      ${hasPos?`<div class="acts">
+        <button class="iconbtn" onclick='focusMember("${esc(String(m.id))}")'>地図</button>
+        <button class="iconbtn" onclick='showTrail("${esc(String(m.id))}","${esc(m.name)}")'>足あと</button>
+      </div>`:""}</div>`;
+  }).join("");
+}
+function focusMember(id){
+  const m=state.members.find(x=>String(x.id)===String(id)); if(!m||m.lat==null) return;
+  showView("map"); followId=id; map.setView([m.lat,m.lng],16);
+}
+async function showTrail(id, name){
+  showView("map");
+  try{
+    const j=await api({action:"trail", memberId:id});
+    trailLayer.clearLayers();
+    if(!j.points||j.points.length<2){ toast("今日の足あとはまだありません"); return; }
+    const pts=j.points;
+    const latlngs=pts.map(p=>[p.lat,p.lng]);
+    const m=state.members.find(x=>String(x.id)===String(id));
+    L.polyline(latlngs,{color:(m&&m.color)||"#3D5AFE",weight:4,opacity:.75,dashArray:"1 8",lineCap:"round"}).addTo(trailLayer);
+    L.circleMarker(latlngs[0],{radius:5,color:"#fff",fillColor:"#8E9BB5",fillOpacity:1,weight:2}).addTo(trailLayer);
+    map.fitBounds(latlngs,{padding:[60,60]});
+    let total=0;
+    for(let i=1;i<pts.length;i++) total+=dist(pts[i-1],pts[i]);
+    toast(`${name||""}さんの足あと: ${fmtDist(total)} ／ ${fmtTime(pts[0].ts)}〜${fmtTime(pts[pts.length-1].ts)}（地図タップで消去）`);
+    map.once("click",()=>trailLayer.clearLayers());
+  }catch(e){ toast("足あとを取得できません: "+e.message); }
+}
+
+/* ---------- スポット一覧＋ルート ---------- */
+function statusTag(s){
+  const c={"未訪問":"#8E9BB5","対応中":"#3D5AFE","成約":"#00C896","再訪予定":"#FF9100","NG":"#FF5252"}[s]||"#8E9BB5";
+  return `<span class="tag" style="background:${c}1A;color:${c}">${esc(s||"未訪問")}</span>`;
+}
+function renderPinList(){
+  const el=document.getElementById("pinList"); if(!el) return;
+  const q=(document.getElementById("pinSearch").value||"").toLowerCase();
+  let list=state.pins.filter(p=>!areaFilter||p.area===areaFilter);
+  if(q) list=list.filter(p=>(p.name+p.addr+p.memo+p.area).toLowerCase().includes(q));
+  if(!list.length){ el.innerHTML=`<div class="empty"><div class="big">📌</div>スポットがありません<br>地図を長押し、または＋ボタンで追加できます</div>`; return; }
+  const areas=[...new Set(list.map(p=>p.area||"未分類"))].sort();
+  el.innerHTML=areas.map(a=>{
+    const items=list.filter(p=>(p.area||"未分類")===a);
+    return `<div class="sec-label">${esc(a)}（${items.length}件）</div>`+items.map(p=>{
+      const t=PIN_TYPES[p.type]||PIN_TYPES["その他"];
+      const ph=(p.photos&&p.photos.length)? photoImgTag(p.photos[0], p.id) : t.emoji;
+      const rsel=routeMode&&routeSel.has(p.id);
+      return `<div class="card pincard ${rsel?'rsel':''}" onclick="${routeMode?`toggleRouteSel(${p.id})`:`openPinSheet(${p.id})`}">
+        <div class="thumb">${ph}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:900">${rsel?"✅ ":""}${esc(p.name)}</div>
+          <div style="font-size:12px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:700">${esc(p.addr||"住所未登録")}</div>
+          <div style="margin-top:4px">${statusTag(p.status)}<span class="tag" style="background:var(--chipbg);color:var(--brand)">${esc(p.type)}</span></div>
+        </div></div>`;
+    }).join("");
+  }).join("");
+  hydratePhotos(el);
+}
+function toggleRouteMode(){
+  routeMode=!routeMode;
+  routeSel.clear();
+  updateRouteBar();
+  renderPins(); renderPinList();
+  if(routeMode){ toast("訪問先をタップして選択してください（地図でもリストでも可）"); if(curView!=="pins"&&curView!=="map") showView("pins"); }
+  document.getElementById("routeBar").classList.toggle("open", routeMode);
+}
+function toggleRouteSel(id){
+  if(routeSel.has(id)) routeSel.delete(id);
+  else{
+    if(routeSel.size>=10){ toast("選択できるのは10件までです"); return; }
+    routeSel.add(id);
+  }
+  updateRouteBar(); renderPins(); renderPinList();
+}
+function updateRouteBar(){ document.getElementById("routeCnt").textContent=routeSel.size; }
+function startRoute(){
+  if(!routeSel.size){ toast("訪問先を選択してください"); return; }
+  openRouteFor([...routeSel]);
+}
+function openRouteFor(ids){
+  const pts=state.pins.filter(p=>ids.includes(p.id));
+  if(!pts.length){ toast("対象がありません"); return; }
+  const origin = myPos || map.getCenter();
+  const o = {lat:origin.lat, lng:origin.lng};
+  const order=[]; const rest=[...pts]; let cur=o;
+  while(rest.length){
+    let bi=0, bd=Infinity;
+    rest.forEach((p,i)=>{ const d=dist(cur,p); if(d<bd){bd=d;bi=i;} });
+    const nxt=rest.splice(bi,1)[0];
+    order.push(nxt); cur=nxt;
+  }
+  const dest=order[order.length-1];
+  const wps=order.slice(0,-1).map(p=>p.lat+","+p.lng).join("|");
+  const url=`https://www.google.com/maps/dir/?api=1&origin=${o.lat},${o.lng}&destination=${dest.lat},${dest.lng}&travelmode=driving${wps?`&waypoints=${encodeURIComponent(wps)}`:""}`;
+  window.open(url,"_blank","noopener");
+  toast(`${order.length}件を近い順に並べてナビを開きました`);
+}
+
+/* ---------- 一括取込 ---------- */
+let bulkCancel=false;
+function openBulkImport(){
+  openSheet(`
+    <div class="sh-title">スポット一括取込</div>
+    <div class="sh-sub">Excelからコピー＆貼り付け（タブ区切り）またはカンマ区切り。1回最大300件</div>
+    <div class="note" style="margin-bottom:10px">列の順序: <b>名前, 種別, エリア, 住所, 緯度, 経度, メモ</b><br>・種別は ${Object.keys(PIN_TYPES).join("/")}（空欄→店舗）<br>・緯度経度が空欄の行は<b>住所から自動で座標を取得</b>します（1件あたり約1.2秒）</div>
+    <div class="field"><textarea id="bulk-text" style="min-height:140px;font-size:12px" placeholder="居酒屋とり吉	店舗	梅田	大阪市北区堂山町3-x	34.703	135.502	グルぽ候補"></textarea></div>
+    <div id="bulkProg" style="font-size:13px;font-weight:800;margin-bottom:8px;color:var(--brand)"></div>
+    <div class="btnrow">
+      <button class="btn ghost" onclick="bulkCancel=true;closeSheet()">キャンセル</button>
+      <button class="btn pri" id="bulkGo" onclick="runBulkImport()">解析して取込</button>
+    </div>`);
+}
+async function runBulkImport(){
+  const text=document.getElementById("bulk-text").value.trim();
+  const prog=document.getElementById("bulkProg");
+  if(!text){ toast("データを貼り付けてください"); return; }
+  bulkCancel=false;
+  const lines=text.split(/\r?\n/).filter(l=>l.trim());
+  const rows=[];
+  for(const line of lines){
+    const c = line.includes("\t")? line.split("\t") : line.split(",");
+    if(!c[0] || c[0].trim()==="名前") continue;
+    rows.push({name:c[0].trim(), type:(c[1]||"").trim()||"店舗", area:(c[2]||"").trim(),
+      addr:(c[3]||"").trim(), lat:parseFloat(c[4])||null, lng:parseFloat(c[5])||null, memo:(c[6]||"").trim()});
+  }
+  if(!rows.length){ toast("有効な行がありません"); return; }
+  if(rows.length>300){ toast("1回の取込は300件までです（"+rows.length+"件検出）"); return; }
+  const needGeo=rows.filter(r=>(r.lat==null||r.lng==null)&&r.addr);
+  document.getElementById("bulkGo").disabled=true;
+  prog.textContent=`解析OK: ${rows.length}件（うち住所から座標取得: ${needGeo.length}件）`;
+  for(let i=0;i<needGeo.length;i++){
+    if(bulkCancel) return;
+    prog.textContent=`座標を取得中… ${i+1}/${needGeo.length}件（${needGeo[i].name}）`;
+    try{
+      const r=await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&accept-language=ja&q=${encodeURIComponent(needGeo[i].addr)}`);
+      const j=await r.json();
+      if(j[0]){ needGeo[i].lat=parseFloat(j[0].lat); needGeo[i].lng=parseFloat(j[0].lon); }
+    }catch(e){}
+    await new Promise(r=>setTimeout(r,1200));
+  }
+  const valid=rows.filter(r=>r.lat!=null&&r.lng!=null);
+  const skipped=rows.length-valid.length;
+  if(!valid.length){ prog.textContent="座標を特定できる行がありませんでした"; document.getElementById("bulkGo").disabled=false; return; }
+  prog.textContent=`サーバーへ送信中… ${valid.length}件`;
+  try{
+    let added=0;
+    for(let i=0;i<valid.length;i+=100){
+      const j=await api({action:"pin_bulk", pins:valid.slice(i,i+100)});
+      added+=j.added||0;
+    }
+    closeSheet();
+    toast(`${added}件を取り込みました${skipped?`（${skipped}件は座標不明でスキップ）`:""}`);
+    tick();
+  }catch(e){ prog.textContent="取込に失敗: "+e.message; document.getElementById("bulkGo").disabled=false; }
+}
+
+/* =====================================================================
+   予定・訪問ログ
+===================================================================== */
+function setVisTab(t){
+  visTab=t;
+  document.getElementById("tab-sched").classList.toggle("act",t==="sched");
+  document.getElementById("tab-log").classList.toggle("act",t==="log");
+  renderVisits();
+}
+function updateSchedBadge(){
+  const today=todayStr(0);
+  const n=(state.schedules||[]).filter(s=>s.date===today && !s.done &&
+    (!s.assignee || s.assignee===cfg.name)).length;
+  const b=document.getElementById("schedBadge");
+  b.textContent=n; b.style.display=n?"":"none";
+}
+function schedDayLabel(dateStr){
+  const today=todayStr(0), tomorrow=todayStr(1);
+  if(dateStr===today) return "今日";
+  if(dateStr===tomorrow) return "明日";
+  const d=new Date(dateStr+"T00:00:00");
+  const w=["日","月","火","水","木","金","土"][d.getDay()];
+  return (d.getMonth()+1)+"/"+d.getDate()+"("+w+")";
+}
+function renderVisits(){
+  const el=document.getElementById("visList"); if(!el) return;
+  const vs=(state.visits||[]).slice().sort((a,b)=>b.ts-a.ts);
+  document.getElementById("visCnt").textContent = visTab==="sched" ? (state.schedules||[]).filter(s=>!s.done).length : vs.length;
+
+  if(visTab==="sched"){ renderSchedList(el); return; }
+
+  if(!vs.length){ el.innerHTML=`<div class="empty"><div class="big">👣</div>訪問ログはまだありません<br>スポット詳細の「訪問を記録」から残せます</div>`; return; }
+  const today=new Date(); today.setHours(0,0,0,0);
+  const label=ts=>{ const d=new Date(ts); d.setHours(0,0,0,0);
+    const diff=(today-d)/86400e3;
+    return diff===0?"今日":diff===1?"昨日":(d.getMonth()+1)+"/"+d.getDate(); };
+  let cur=""; let html="";
+  vs.forEach(v=>{
+    const l=label(v.ts);
+    if(l!==cur){ cur=l; html+=`<div class="sec-label">${l}</div>`; }
+    const c={"成約":"#00C896","NG":"#FF5252","不在":"#8E9BB5"}[v.result]||"#3D5AFE";
+    html+=`<div class="card" style="display:flex;gap:10px;align-items:flex-start">
+      <div style="width:8px;align-self:stretch;border-radius:99px;background:${c}"></div>
+      <div style="flex:1"><b>${esc(v.pinName)}</b> <span class="tag" style="background:${c}1A;color:${c}">${esc(v.result)}</span>
+        <div style="font-size:12.5px;color:var(--sub);font-weight:700">${esc(v.by)} ・ ${fmtTime(v.ts)}</div>
+        ${v.note?`<div style="font-size:13px;margin-top:3px">${esc(v.note)}</div>`:""}</div></div>`;
+  });
+  el.innerHTML=html;
+}
+function renderSchedList(el){
+  const list=(state.schedules||[]).slice();
+  if(!list.length){
+    el.innerHTML=`<div class="empty"><div class="big">📅</div>予定はまだありません<br>スポット詳細の「予定に入れる」から登録できます<br><small style="font-weight:700">担当を割り当てると、その人の「今日やること」になります</small></div>`;
+    return;
+  }
+  const today=todayStr(0);
+  const todayMineUndone = list.filter(s=>s.date===today && !s.done).map(s=>s.pinId);
+  let html="";
+  if(todayMineUndone.length){
+    html+=`<div class="btnrow" style="margin:2px 0 10px"><button class="btn pri" onclick='openRouteFor(${JSON.stringify(todayMineUndone)})'>今日の残り${todayMineUndone.length}件でルート作成</button></div>`;
+  }
+  const dates=[...new Set(list.map(s=>s.date))].sort();
+  dates.forEach(d=>{
+    const items=list.filter(s=>s.date===d);
+    const overdue = d<today;
+    html+=`<div class="sec-label ${overdue?'overdue':''}">${schedDayLabel(d)}${overdue?"（期限切れ）":""}</div>`;
+    items.forEach(s=>{
+      const pin=state.pins.find(p=>String(p.id)===String(s.pinId));
+      html+=`<div class="card schrow ${s.done?'done':''}">
+        <button class="schk ${s.done?'on':''}" onclick="toggleSched('${esc(String(s.id))}',${s.done?"false":"true"})">${s.done?"✓":""}</button>
+        <div class="t" onclick="${pin?`openPinSheet(${pin.id})`:""}">
+          <b>${esc(s.pinName)}</b>
+          <small>${pin?esc(pin.area||pin.addr||""):"スポット削除済み"}${s.by?` ・ 登録: ${esc(s.by)}`:""}</small>
+        </div>
+        ${s.assignee?`<span class="who">${esc(s.assignee)}</span>`:`<span class="who" style="opacity:.6">誰でも</span>`}
+        <button class="del" onclick="delSched('${esc(String(s.id))}')">✕</button>
+      </div>`;
+    });
+  });
+  el.innerHTML=html;
+}
+async function toggleSched(id, done){
+  try{
+    await api({action:"sched_done", id, done});
+    const s=(state.schedules||[]).find(x=>String(x.id)===String(id));
+    if(s) s.done=done;
+    renderVisits(); updateSchedBadge();
+  }catch(e){ toast("更新に失敗: "+e.message); }
+}
+async function delSched(id){
+  if(!confirm("この予定を削除しますか？")) return;
+  try{
+    await api({action:"sched_del", id});
+    state.schedules=(state.schedules||[]).filter(x=>String(x.id)!==String(id));
+    renderVisits(); updateSchedBadge();
+  }catch(e){ toast("削除に失敗: "+e.message); }
+}
+function openSchedForm(pinId){
+  const p=state.pins.find(x=>x.id==pinId); if(!p) return;
+  const names=[...new Set(state.members.map(m=>m.name))];
+  openSheet(`
+    <div class="sh-title">予定に入れる</div>
+    <div class="sh-sub">${esc(p.name)}</div>
+    <div class="field"><label>訪問日</label><input type="date" id="sc-date" value="${todayStr(0)}" min="${todayStr(0)}"></div>
+    <div class="field"><label>担当</label><select id="sc-who"><option value="">誰でも（チーム全体）</option>${names.map(n=>`<option ${n===cfg.name?"selected":""}>${esc(n)}</option>`).join("")}</select></div>
+    <div class="btnrow"><button class="btn ghost" onclick="openPinSheet(${p.id})">戻る</button>
+    <button class="btn pri" onclick="saveSched(${p.id})">予定を登録</button></div>
+    <div class="note">担当者が当日この訪問先の記録を残すと、予定は自動で✓完了になります。</div>`);
+}
+async function saveSched(pinId){
+  const date=document.getElementById("sc-date").value;
+  const assignee=document.getElementById("sc-who").value;
+  if(!date){ toast("日付を選んでください"); return; }
+  try{
+    await api({action:"sched_add", pinId, date, assignee});
+    closeSheet(); toast("予定を登録しました");
+    await tick();
+    showView("visits"); setVisTab("sched");
+  }catch(e){ toast("登録に失敗: "+e.message); }
+}
+
+/* ---------- 集計 ---------- */
+let statsDays=1;
+function openStats(){ statsDays=1; renderStats(); }
+function renderStats(){
+  const now=Date.now();
+  const dayStart=new Date(); dayStart.setHours(0,0,0,0);
+  const from = statsDays===1? dayStart.getTime() : now-statsDays*86400e3;
+  const vs=(state.visits||[]).filter(v=>v.ts>=from);
+  const total=vs.length;
+  const won=vs.filter(v=>v.result==="成約").length;
+  const rate= total? Math.round(won/total*100):0;
+  const byResult={}, byMember={};
+  vs.forEach(v=>{ byResult[v.result]=(byResult[v.result]||0)+1; byMember[v.by]=(byMember[v.by]||0)+1; });
+  const rc={"成約":"#00C896","NG":"#FF5252","不在":"#8E9BB5","在宅・面談":"#3D5AFE","再訪約束":"#FF9100","チラシ投函":"#7C4DFF","その他":"#607D8B"};
+  const maxR=Math.max(1,...Object.values(byResult));
+  const maxM=Math.max(1,...Object.values(byMember));
+  const bars=(obj,max,colorFn)=>Object.entries(obj).sort((a,b)=>b[1]-a[1]).map(([k,v])=>
+    `<div class="barrow"><div class="lbl">${esc(k)}</div><div class="track"><div class="fill" style="width:${Math.round(v/max*100)}%;background:${colorFn(k)}"></div></div><div class="val">${v}</div></div>`).join("");
+  openSheet(`
+    <div class="sh-title">訪問集計</div>
+    <div class="sh-sub">直近${(state.visits||[]).length>=300?"300件（それ以前はスプレッドシート参照）":"の全記録"}から集計</div>
+    <div class="seg" style="margin-bottom:12px">
+      ${[["今日",1],["7日間",7],["30日間",30]].map(([l,d])=>`<button class="${statsDays===d?'act':''}" onclick="statsDays=${d};renderStats()">${l}</button>`).join("")}
+    </div>
+    <div class="donutwrap">
+      <div class="donut" style="background:conic-gradient(var(--mint) ${rate*3.6}deg, var(--line) 0)"><span>${rate}%</span></div>
+      <div style="flex:1">
+        <div style="font-weight:900;font-size:15px">成約率</div>
+        <div style="font-size:12.5px;color:var(--sub);font-weight:700">${total}件の訪問のうち ${won}件が成約</div>
+      </div>
+    </div>
+    <div class="statnum">
+      <div><b>${total}</b><small>訪問</small></div>
+      <div><b style="color:var(--mint)">${won}</b><small>成約</small></div>
+      <div><b>${(state.schedules||[]).filter(s=>s.date===todayStr(0)&&!s.done).length}</b><small>今日の残予定</small></div>
+    </div>
+    <div class="sec-label">結果の内訳</div>
+    ${bars(byResult,maxR,k=>rc[k]||"#3D5AFE")||'<div class="empty" style="padding:16px">データなし</div>'}
+    <div class="sec-label">メンバー別 訪問数</div>
+    ${bars(byMember,maxM,k=>memberColor(null,k))||'<div class="empty" style="padding:16px">データなし</div>'}
+    <div class="btnrow"><button class="btn sec" onclick="exportVisitsCsv()">CSV出力</button><button class="btn pri" onclick="closeSheet()">閉じる</button></div>`);
+}
+function exportVisitsCsv(){
+  const vs=(state.visits||[]).slice().sort((a,b)=>b.ts-a.ts);
+  if(!vs.length){ toast("出力する訪問ログがありません"); return; }
+  const rows=[["日時","スポット","担当","結果","メモ"]];
+  vs.forEach(v=>rows.push([new Date(v.ts).toLocaleString("ja-JP"), v.pinName, v.by, v.result, v.note||""]));
+  csvDownload(rows, "訪問ログ");
+}
+function exportPinsCsv(){
+  if(!state.pins.length){ toast("出力するスポットがありません"); return; }
+  const rows=[["名前","種別","エリア","住所","緯度","経度","メモ","ステータス","登録者"]];
+  state.pins.forEach(p=>rows.push([p.name,p.type,p.area||"",p.addr||"",p.lat,p.lng,p.memo||"",p.status||"",p.by||""]));
+  csvDownload(rows, "スポット一覧");
+}
+function csvDownload(rows, name){
+  const csv="﻿"+rows.map(r=>r.map(c=>'"'+String(c==null?"":c).replace(/"/g,'""')+'"').join(",")).join("\r\n");
+  downloadBlob(new Blob([csv],{type:"text/csv"}), name+"_"+new Date().toISOString().slice(0,10)+".csv");
+  toast("CSVを出力しました");
+}
+function downloadBlob(blob, filename){
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob); a.download=filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1000);
+}
+
+/* =====================================================================
+   ボトムシート（ドラッグで閉じられる）
+===================================================================== */
+const sheetEl=document.getElementById("sheet");
+function openSheet(html){ sheetEl.style.transform=""; document.getElementById("sheetBody").innerHTML=html; document.getElementById("sheetWrap").classList.add("open"); hydratePhotos(document.getElementById("sheetBody")); }
+function closeSheet(){ document.getElementById("sheetWrap").classList.remove("open"); sheetEl.style.transform=""; }
+(function(){
+  const grip=document.getElementById("gripArea");
+  let startY=null;
+  grip.addEventListener("pointerdown", e=>{
+    startY=e.clientY;
+    sheetEl.style.transition="none";
+    grip.setPointerCapture(e.pointerId);
+  });
+  grip.addEventListener("pointermove", e=>{
+    if(startY==null) return;
+    const dy=Math.max(0, e.clientY-startY);
+    sheetEl.style.transform=`translateY(${dy}px)`;
+  });
+  const end=e=>{
+    if(startY==null) return;
+    const dy=Math.max(0, e.clientY-startY);
+    startY=null;
+    sheetEl.style.transition="transform .22s ease";
+    if(dy>110){ sheetEl.style.transform="translateY(105%)"; setTimeout(()=>{ closeSheet(); sheetEl.style.transition=""; },200); }
+    else{ sheetEl.style.transform=""; setTimeout(()=>{ sheetEl.style.transition=""; },240); }
+  };
+  grip.addEventListener("pointerup", end);
+  grip.addEventListener("pointercancel", end);
+})();
+
+function openMemberSheet(m){
+  const d=(myPos&&m.lat!=null)? fmtDist(dist(myPos,m)):"—";
+  const stay=stayMin(m);
+  const today=new Date(); today.setHours(0,0,0,0);
+  const tv=(state.visits||[]).filter(v=>v.by===m.name && v.ts>=today.getTime());
+  const twon=tv.filter(v=>v.result==="成約").length;
+  openSheet(`
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:8px">
+      <div class="av" style="width:58px;height:58px;border-radius:50%;background:${esc(m.color||'#3D5AFE')};display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:23px">${esc(m.name.slice(0,1))}</div>
+      <div><div class="sh-title">${esc(m.name)} ${m.role==="admin"?'<span class="rolebadge">管理者</span>':''}</div><div class="sh-sub" style="margin:0">${timeAgo(m.ts)}に更新${stay?` ・ ⏱${stay}分滞在中`:""}</div></div>
+    </div>
+    <div class="statnum">
+      <div><b>${tv.length}</b><small>今日の訪問</small></div>
+      <div><b style="color:var(--mint)">${twon}</b><small>今日の成約</small></div>
+      <div><b>${m.bat!=null&&m.bat!==""?m.bat+"%":"—"}</b><small>バッテリー</small></div>
+    </div>
+    <div class="kv"><b>移動</b>${m.spd!=null?`${spdIcon(m.spd)||"⏸"} ${m.spd} km/h`:"—"}</div>
+    <div class="kv"><b>距離</b>あなたから ${d}</div>
+    <div class="btnrow">
+      <button class="btn pri" onclick='closeSheet();focusMember("${esc(String(m.id))}")'>地図で追う</button>
+      <button class="btn sec" onclick='closeSheet();showTrail("${esc(String(m.id))}","${esc(m.name)}")'>今日の足あと</button>
+      <a class="btn sec" style="text-decoration:none" href="https://www.google.com/maps/dir/?api=1&destination=${m.lat},${m.lng}" target="_blank" rel="noopener">ここへ向かう</a>
+    </div>`);
+}
+
+function openPinSheet(id){
+  const p=state.pins.find(x=>x.id==id); if(!p) return;
+  const t=PIN_TYPES[p.type]||PIN_TYPES["その他"];
+  const phs=(p.photos||[]).map(ph=>photoImgTag(ph, p.id)).join("");
+  const history=(state.visits||[]).filter(v=>String(v.pinId)===String(p.id)).sort((a,b)=>b.ts-a.ts).slice(0,5);
+  const hist=history.length?
+    `<div class="sec-label">訪問履歴（最新${history.length}件）</div>`+
+    history.map(v=>`<div class="vh"><span class="when">${new Date(v.ts).toLocaleDateString("ja-JP",{month:"numeric",day:"numeric"})} ${fmtTime(v.ts)}</span><b>${esc(v.result)}</b><span>${esc(v.by)}</span>${v.note?`<span style="color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(v.note)}</span>`:""}</div>`).join("") : "";
+  const sched=(state.schedules||[]).filter(s=>String(s.pinId)===String(p.id) && !s.done);
+  const schedInfo=sched.length? `<div class="note" style="margin-bottom:8px">予定あり: ${sched.map(s=>schedDayLabel(s.date)+(s.assignee?"("+esc(s.assignee)+")":"")).join("、")}</div>`:"";
+  openSheet(`
+    <div class="sh-title">${t.emoji} ${esc(p.name)}</div>
+    <div class="sh-sub">${statusTag(p.status)}<span class="tag" style="background:var(--chipbg);color:var(--brand)">${esc(p.type)}</span>${p.area?`<span class="tag" style="background:#FFF3E0;color:#E65100">📍${esc(p.area)}</span>`:""}</div>
+    ${schedInfo}
+    <div class="photos">${phs}<button class="addph" onclick="pickPhoto(${p.id})"><span>📷</span>写真を追加</button></div>
+    <div class="kv"><b>住所</b><span>${esc(p.addr||"未登録")}</span></div>
+    ${p.memo?`<div class="kv"><b>メモ</b><span>${esc(p.memo)}</span></div>`:""}
+    <div class="kv"><b>登録</b><span>${esc(p.by||"—")} ・ ${new Date(p.ts).toLocaleDateString("ja-JP")}</span></div>
+    ${hist}
+    <div class="btnrow">
+      <button class="btn pri" onclick="openVisitForm(${p.id})">訪問を記録</button>
+      <a class="btn sec" style="text-decoration:none" href="https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}" target="_blank" rel="noopener">ナビ</a>
+      <button class="btn sec" onclick="openSchedForm(${p.id})">予定</button>
+    </div>
+    <div class="btnrow">
+      ${chatEnabled()?`<button class="btn ghost" onclick="sharePinToChat(${p.id})">チャットに共有</button>`:""}
+      <button class="btn ghost" onclick="sharePinOS(${p.id})">送る</button>
+      <a class="btn ghost" style="text-decoration:none" href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${p.lat},${p.lng}" target="_blank" rel="noopener">外観SV</a>
+    </div>
+    <div class="btnrow">
+      <button class="btn ghost" onclick="openPinForm(${p.id})">編集</button>
+      <button class="btn warn" onclick="delPin(${p.id})">削除</button>
+    </div>
+    <div class="note">🔒 このスポット情報はお客様の個人情報です。業務目的以外での利用・社外共有はできません。健康状態など機微な内容はメモに書かないでください。</div>`);
+}
+
+/* ---------- スポット追加/編集 ---------- */
+let formTypeSel="顧客宅", formStatusSel="未訪問";
+function addPinHere(){
+  if(myPos) openPinForm(null, myPos.lat, myPos.lng);
+  else { const c=map.getCenter(); openPinForm(null, c.lat, c.lng); toast("現在地が未取得のため地図の中心に追加します"); }
+}
+function openPinForm(id, lat, lng){
+  const p = id? state.pins.find(x=>x.id==id) : null;
+  formTypeSel = p? p.type : "顧客宅";
+  formStatusSel = p? (p.status||"未訪問") : "未訪問";
+  const la = p? p.lat : lat, ln = p? p.lng : lng;
+  const areas=[...new Set(state.pins.map(x=>x.area).filter(Boolean))];
+  openSheet(`
+    <div class="sh-title">${p?"スポットを編集":"スポットを追加"}</div>
+    <div class="sh-sub">位置: ${la.toFixed(5)}, ${ln.toFixed(5)}</div>
+    <div class="field"><label>名前 *</label><input id="f-name" placeholder="例: 山本様邸 / 居酒屋〇〇" value="${p?esc(p.name):""}"></div>
+    <div class="field"><label>種別</label><div class="seg" id="f-type">${Object.keys(PIN_TYPES).map(k=>`<button class="${k===formTypeSel?'act':''}" onclick="selSeg('f-type','${k}');formTypeSel='${k}'">${PIN_TYPES[k].emoji} ${k}</button>`).join("")}</div></div>
+    <div class="field"><label>エリア（地域名で束ねる）</label><input id="f-area" list="areaList" placeholder="例: 梅田 / 福島 / 中津" value="${p?esc(p.area||""):esc(areaFilter||"")}"><datalist id="areaList">${areas.map(a=>`<option value="${esc(a)}">`).join("")}</datalist></div>
+    <div class="field"><label>住所 <button style="color:var(--brand);font-weight:900;font-size:12px" onclick="revGeo(${la},${ln})">📡 自動取得</button></label><input id="f-addr" placeholder="タップで自動取得もできます" value="${p?esc(p.addr||""):""}"></div>
+    <div class="field"><label>ステータス</label><div class="seg" id="f-status">${PIN_STATUS.map(s=>`<button class="${s===formStatusSel?'act':''}" onclick="selSeg('f-status','${s}');formStatusSel='${s}'">${s}</button>`).join("")}</div></div>
+    <div class="field"><label>メモ（在宅時間帯・注意点など）</label><textarea id="f-memo">${p?esc(p.memo||""):""}</textarea></div>
+    <div class="btnrow"><button class="btn ghost" onclick="closeSheet()">キャンセル</button>
+    <button class="btn pri" onclick="savePin(${p?p.id:"null"},${la},${ln})">保存する</button></div>
+    <div class="note">🔒 お客様の情報は必要最小限に。人物・車のナンバー等が写った写真、健康状態・宗教等の機微な内容のメモは登録しないでください（開示請求で本人が読む前提で書く）。</div>`);
+}
+function selSeg(id,val){ document.querySelectorAll("#"+id+" button").forEach(b=>b.classList.toggle("act",b.textContent.includes(val))); }
+async function revGeo(lat,lng){
+  try{
+    toast("住所を取得中…");
+    const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=ja&zoom=18`);
+    const j=await r.json(); const a=j.address||{};
+    const addr=[a.province||a.state,a.city||a.town||a.village,a.suburb||a.neighbourhood||a.quarter,a.road,a.house_number].filter(Boolean).join("");
+    document.getElementById("f-addr").value=addr||j.display_name||"";
+  }catch(e){ toast("自動取得に失敗しました。手入力してください"); }
+}
+async function savePin(id,lat,lng){
+  const name=document.getElementById("f-name").value.trim();
+  if(!name){ toast("名前を入力してください"); return; }
+  const payload={action:"pin_save", pin:{id:id||undefined, name, type:formTypeSel, area:document.getElementById("f-area").value.trim(),
+    addr:document.getElementById("f-addr").value.trim(), lat, lng,
+    memo:document.getElementById("f-memo").value.trim(), status:formStatusSel}};
+  closeSheet();
+  try{
+    await api(payload);
+    toast("保存しました"); tick();
+  }catch(e){
+    if(e.message==="未接続"||/認証/.test(e.message)){ toast("保存に失敗: "+e.message); return; }
+    outboxPush(payload);
+    toast("圏外のため送信待ちに保存しました（電波回復後に自動送信）");
+  }
+}
+async function delPin(id){
+  if(!confirm("このスポットを削除しますか？（削除は監査ログに記録されます）")) return;
+  try{ await api({action:"pin_del", id}); closeSheet(); toast("削除しました"); tick(); }
+  catch(e){ toast("削除に失敗: "+e.message); }
+}
+
+/* ---------- 訪問記録 ---------- */
+let visitResultSel="在宅・面談";
+function openVisitForm(pinId){
+  const p=state.pins.find(x=>x.id==pinId); if(!p) return;
+  visitResultSel="在宅・面談";
+  openSheet(`
+    <div class="sh-title">訪問を記録</div>
+    <div class="sh-sub">${esc(p.name)}</div>
+    <div class="field"><label>結果</label><div class="seg" id="f-vres">${VISIT_RESULTS.map(s=>`<button class="${s===visitResultSel?'act':''}" onclick="selSeg('f-vres','${s}');visitResultSel='${s}'">${s}</button>`).join("")}</div></div>
+    <div class="field"><label>メモ</label><textarea id="f-vnote" placeholder="例: 奥様対応。木曜18時に再訪約束"></textarea></div>
+    <div class="btnrow"><button class="btn ghost" onclick="openPinSheet(${p.id})">戻る</button>
+    <button class="btn pri" onclick="saveVisit(${p.id})">記録する</button></div>
+    <div class="note">今日の予定に入っている訪問先なら、記録と同時に予定も✓完了になります。</div>`);
+}
+async function saveVisit(pinId){
+  const payload={action:"visit_add", pinId, result:visitResultSel, note:document.getElementById("f-vnote").value.trim(),
+    lat:myPos?myPos.lat:null, lng:myPos?myPos.lng:null};
+  closeSheet();
+  try{
+    await api(payload);
+    toast("訪問を記録しました"); tick();
+  }catch(e){
+    if(e.message==="未接続"||/認証/.test(e.message)){ toast("記録に失敗: "+e.message); return; }
+    outboxPush(payload);
+    toast("圏外のため送信待ちに保存しました（電波回復後に自動送信）");
+  }
+}
+
+/* ---------- 写真 ---------- */
+let photoTargetPin=null;
+function pickPhoto(pinId){ photoTargetPin=pinId; document.getElementById("photoInput").click(); }
+document.getElementById("photoInput").addEventListener("change", async e=>{
+  const f=e.target.files[0]; e.target.value="";
+  if(!f||photoTargetPin==null) return;
+  toast("写真を圧縮中…");
+  const b64=await compressImage(f,1280,0.82);
+  try{
+    toast("アップロード中…");
+    await api({action:"photo_add", pinId:photoTargetPin, data:b64});
+    toast("写真を追加しました");
+    await tick(); openPinSheet(photoTargetPin);
+  }catch(err){ toast("アップロード失敗: "+err.message); }
+});
+function compressImage(file,maxW,q){
+  return new Promise(res=>{
+    const img=new Image();
+    img.onload=()=>{
+      const sc=Math.min(1,maxW/Math.max(img.width,img.height));
+      const cv=document.createElement("canvas");
+      cv.width=Math.round(img.width*sc); cv.height=Math.round(img.height*sc);
+      cv.getContext("2d").drawImage(img,0,0,cv.width,cv.height);
+      res(cv.toDataURL("image/jpeg",q).split(",")[1]);
+    };
+    img.src=URL.createObjectURL(file);
+  });
+}
+
+/* =====================================================================
+   設定画面
+===================================================================== */
+function renderSettings(){
+  const el=document.getElementById("setBody");
+  const pauseLabel = pauseUntil>Date.now()? "（"+fmtTime(pauseUntil)+"まで停止中）" : "";
+  const isAdmin = cfg.role==="admin";
+  const ob = outbox().length;
+  el.innerHTML=`
+  <div class="sec-label">プロフィール</div>
+  <div class="card">
+    <div class="setrow"><div class="ic2" style="background:${esc(cfg.color)};color:#fff;font-weight:900">${esc((cfg.name||"?").slice(0,1))}</div>
+      <div class="t"><b>${esc(cfg.name||"未設定")}</b><small>${isAdmin?"管理者":"メンバー"} ・ ${cfg.demo?"デモモード":(srv?esc(srv.org_name||""):"未接続")}</small></div></div>
+    <div class="field" style="margin-top:10px"><label>自分の色</label><div class="colorpick">${COLORS.map(c=>`<button style="background:${c}" class="${cfg.color===c?'act':''}" onclick="cfg.color='${c}';saveCfg();renderSettings()"></button>`).join("")}</div></div>
+  </div>
+
+  <div class="sec-label">表示・通知</div>
+  <div class="card">
+    <div class="setrow"><div class="t"><b>テーマ</b><small>ダークは夜の外回りで見やすく電池にも優しい</small></div>
+      <div class="seg">${[["auto","自動"],["light","ライト"],["dark","ダーク"]].map(([v,l])=>`<button class="${(cfg.theme||"auto")===v?'act':''}" onclick="cfg.theme='${v}';saveCfg();applyTheme();renderSettings()">${l}</button>`).join("")}</div></div>
+    <div class="setrow"><div class="t"><b>通知</b><small>新着チャットと訪問先への接近をお知らせ</small></div>
+      <button class="toggle ${cfg.notify?'on':''}" onclick="toggleNotify()"></button></div>
+    <div class="setrow"><div class="t"><b>使い方 1分ガイド</b><small>はじめての方向けの操作早見</small></div>
+      <button class="iconbtn" onclick="openGuide()">開く</button></div>
+  </div>
+
+  <div class="sec-label">位置共有（プライバシー）</div>
+  <div class="card">
+    <div class="setrow"><div class="t"><b>位置情報を共有</b><small>ONの間だけチームに現在地が表示されます</small></div>
+      <button class="toggle ${cfg.share?'on':''}" onclick="toggleShare();renderSettings()"></button></div>
+    <div class="setrow"><div class="t"><b>一時停止（ゴーストモード）</b><small>休憩や私用の間、共有だけ止められます ${pauseLabel}</small></div>
+      <select onchange="setPause(this.value);this.value=''">
+        <option value="">選択…</option><option value="30">30分停止</option><option value="60">1時間停止</option><option value="180">3時間停止</option><option value="0">再開</option></select></div>
+    <div class="setrow"><div class="t"><b>勤務時間外は自動OFF</b><small>組織の勤務時間帯（${srv?esc(srv.work_start+"〜"+srv.work_end):"09:00〜19:00"}）の外では位置を送信しません</small></div>
+      <button class="toggle ${cfg.autoOff?'on':''}" onclick="cfg.autoOff=!cfg.autoOff;saveCfg();renderSettings();updateShareBadge()"></button></div>
+    <div class="setrow"><div class="t"><b>更新間隔</b><small>短いほどリアルタイム・電池消費増</small></div>
+      <select onchange="cfg.interval=Number(this.value);saveCfg();startLoop()">
+        ${[15,30,60,120].map(s=>`<option value="${s}" ${cfg.interval===s?"selected":""}>${s}秒</option>`).join("")}</select></div>
+    <div class="setrow"><div class="t"><b>同意事項を確認</b><small>位置情報の取り扱いルール（v${srv?srv.consent_version:1}）</small></div>
+      <button class="iconbtn" onclick="openConsent(true)">表示</button></div>
+    <div class="setrow"><div class="t"><b>自分のデータを出力</b><small>移動ログ・訪問記録・同意履歴をJSONで保存</small></div>
+      <button class="iconbtn" onclick="exportMyData()">出力</button></div>
+  </div>
+
+  ${isAdmin?`
+  <div class="sec-label">管理者メニュー</div>
+  <div class="card">
+    <div class="setrow"><div class="t"><b>メンバー管理</b><small>追加・QR招待・無効化・再発行</small></div><button class="iconbtn" onclick="openMemberAdmin()">開く</button></div>
+    <div class="setrow"><div class="t"><b>組織設定</b><small>組織名・勤務時間帯・表示範囲・保存期間・チャット</small></div><button class="iconbtn" onclick="openOrgSettings()">開く</button></div>
+    <div class="setrow"><div class="t"><b>監査ログ</b><small>参加・削除・設定変更などの操作履歴</small></div><button class="iconbtn" onclick="openAudit()">開く</button></div>
+    <div class="setrow"><div class="t"><b>データ出力（バックアップ・返還用）</b><small>スポット・訪問・メンバーをCSVで一括出力</small></div><button class="iconbtn" onclick="openDataExport()">開く</button></div>
+  </div>`:""}
+
+  <div class="sec-label">接続</div>
+  <div class="card">
+    ${connected()&&!cfg.demo?`<div class="setrow"><div class="t"><b>接続済み</b><small>${esc((cfg.api||"").slice(0,50))}…</small></div>
+      <button class="iconbtn warn" onclick="logout()">退出</button></div>`:""}
+    ${ob?`<div class="setrow"><div class="t"><b>未送信データ</b><small>圏外時に保存された ${ob} 件（電波回復後に自動送信）</small></div>
+      <button class="iconbtn" onclick="outboxFlush().then(()=>renderSettings())">今すぐ送信</button></div>`:""}
+    <div class="btnrow">
+      ${cfg.demo?`<button class="btn warn" onclick="toggleDemo()">デモモードを終了して本番接続へ</button>`:`<button class="btn sec" onclick="toggleDemo()">デモモードで試す</button>`}
+      ${!connected()||cfg.demo?`<button class="btn pri" onclick="openSetup()">参加コードで接続</button>`:""}
+    </div>
+  </div>
+
+  <div class="sec-label">データの扱い</div>
+  <div class="card" style="font-size:13px;color:var(--sub);font-weight:600">
+    <p>・移動履歴は<b>${srv?esc(srv.retention_days):"30"}日</b>、チャットは<b>180日</b>で自動削除。写真は非公開のDriveに保存され、参加メンバーのみ閲覧できます。</p>
+    <p>・共有キーは存在しません。認証は端末ごとのトークンで、管理者はあなたを個別に無効化できます。</p>
+    <p>・スポット（顧客情報）は業務データです。業務目的以外での利用・社外への共有は禁止です。</p>
+    <p style="margin-top:8px">地図: © OpenStreetMap contributors ／ 国土地理院タイル<br>マワル MAP v${VERSION}</p>
+  </div>`;
+}
+function openGuide(){
+  openSheet(`
+    <div class="sh-title">使い方 1分ガイド</div>
+    <div class="sh-sub">よく使う操作だけ覚えれば大丈夫です</div>
+    <div class="feat">右上のボタンで位置共有ON（勤務時間外は自動で止まります）</div>
+    <div class="feat">地図を長押し or ＋ボタンで訪問先を登録（写真・メモも）</div>
+    <div class="feat">訪問したらスポットを開いて「訪問を記録」（予定も自動で✓）</div>
+    <div class="feat">「予定・訪問」タブに今日やることが並びます</div>
+    <div class="feat">予定の「ルート作成」で近い順にナビが起動</div>
+    <div class="feat">チャットで現在地やスポットをそのまま共有</div>
+    <div class="feat">休憩中は設定の「一時停止」で共有だけ止められます</div>
+    <div class="feat">右下の🗺で地図の見た目切替（標準/淡色/航空写真）</div>
+    <div class="btnrow"><button class="btn pri" onclick="closeSheet()">OK</button></div>`);
+}
+function openDataExport(){
+  openSheet(`
+    <div class="sh-title">データ出力</div>
+    <div class="sh-sub">バックアップ・契約終了時の返還・Excel集計用</div>
+    <div class="btnrow"><button class="btn sec" onclick="exportPinsCsv()">スポットCSV</button></div>
+    <div class="btnrow"><button class="btn sec" onclick="exportVisitsCsv()">訪問ログCSV</button></div>
+    <div class="btnrow"><button class="btn sec" onclick="exportMembersCsv()">メンバーCSV</button></div>
+    <div class="note">スポットCSVは「⬆ 一括取込」と同じ列構成のため、別環境への引っ越しにもそのまま使えます。移動ログ・同意ログはスプレッドシート本体から取得してください。</div>
+    <div class="btnrow"><button class="btn pri" onclick="closeSheet()">閉じる</button></div>`);
+}
+async function exportMembersCsv(){
+  try{
+    const j=await api({action:"member_list"});
+    const rows=[["名前","役割","状態","参加日","最終利用"]];
+    (j.members||[]).forEach(m=>rows.push([m.name, m.role==="admin"?"管理者":"メンバー", m.status==="active"?"有効":"無効",
+      m.joined?new Date(m.joined).toLocaleDateString("ja-JP"):"未参加", m.lastSeen?new Date(m.lastSeen).toLocaleString("ja-JP"):"—"]));
+    csvDownload(rows,"メンバー一覧");
+  }catch(e){ toast("出力に失敗: "+e.message); }
+}
+function toggleNotify(){
+  if(!cfg.notify){
+    if(!("Notification" in window)){ toast("この端末は通知に対応していません"); return; }
+    Notification.requestPermission().then(p=>{
+      cfg.notify = p==="granted"; saveCfg(); renderSettings();
+      toast(cfg.notify?"通知をONにしました":"通知が許可されませんでした");
+    });
+  }else{ cfg.notify=false; saveCfg(); renderSettings(); toast("通知をOFFにしました"); }
+}
+function setPause(v){
+  if(v==="") return;
+  const min=Number(v);
+  pauseUntil = min>0? Date.now()+min*60e3 : 0;
+  localStorage.setItem("mawaru_pause", String(pauseUntil));
+  toast(min>0? min+"分間、共有を一時停止します":"共有を再開しました");
+  updateShareBadge(); renderSettings();
+}
+function logout(){
+  if(!confirm("この端末の接続を解除しますか？（再参加には管理者発行の新しい参加コードが必要です）")) return;
+  cfg.token=""; cfg.share=false; saveCfg();
+  if(pollTimer) clearInterval(pollTimer);
+  stopChatPoll();
+  openSetup("接続を解除しました。");
+}
+async function exportMyData(){
+  try{
+    const j=await api({action:"my_export"});
+    downloadBlob(new Blob([JSON.stringify(j.data,null,2)],{type:"application/json"}), "マワルMAP_自分のデータ_"+new Date().toISOString().slice(0,10)+".json");
+    toast("データを出力しました");
+  }catch(e){ toast("出力に失敗: "+e.message); }
+}
+function toggleDemo(){
+  cfg.demo=!cfg.demo; saveCfg();
+  if(cfg.demo){ demoInit(); document.getElementById("demoBanner").style.display="block"; map.setView(DEMO.center,14);
+    cfg.role="admin"; if(!cfg.name)cfg.name="あなた"; saveCfg();
+    srv=DEMO.settings; updateChatVisibility();
+    document.getElementById("bulkBtn").style.display="";
+    toast("デモモード開始（あなた＝管理者）"); }
+  else { document.getElementById("demoBanner").style.display="none"; state={members:[],pins:[],visits:[],schedules:[]}; chatMap.clear(); renderAll();
+    if(!cfg.token){ openSetup(); } toast("デモモード終了"); }
+  startLoop(); renderSettings();
+}
+
+/* =====================================================================
+   管理者パネル
+===================================================================== */
+async function openMemberAdmin(){
+  openSheet(`<div class="sh-title">メンバー管理</div><div class="sh-sub">読込中…</div>`);
+  try{
+    const j=await api({action:"member_list"});
+    renderMemberAdmin(j.members);
+  }catch(e){ openSheet(`<div class="sh-title">メンバー管理</div><div class="note">読込に失敗: ${esc(e.message)}</div>`); }
+}
+function renderMemberAdmin(members){
+  const rows = members.map(m=>{
+    const st = m.status==="active";
+    const joined = m.joined? "参加済 ・ "+timeAgo(m.lastSeen)+"に利用" : (m.invite? "未参加（コード配布待ち）":"未参加");
+    return `<div class="setrow">
+      <div class="t"><b><span class="statusdot" style="background:${st?'#00C896':'#B8C0D4'}"></span>${esc(m.name)}</b>
+        <small>${m.role==="admin"?'<span class="rolebadge">管理者</span> ':''}${st?"":"【無効】"}${joined}
+        ${m.invite?`<br>参加コード: <b style="font-family:monospace">${esc(m.invite)}</b> <button style="color:var(--brand);font-weight:900" onclick="copyText('${esc(m.invite)}')">コピー</button> <button style="color:var(--brand);font-weight:900" onclick="showInviteQR('${esc(m.name)}','${esc(m.invite)}')">QR</button>`:""}</small></div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        ${st?`<button class="iconbtn warn" onclick="memberSet('${m.id}','disabled')">無効化</button>`:`<button class="iconbtn" onclick="memberSet('${m.id}','active')">有効化</button>`}
+        <button class="iconbtn" onclick="memberReissue('${m.id}')">再発行</button>
+      </div></div>`;
+  }).join("");
+  openSheet(`
+    <div class="sh-title">メンバー管理</div>
+    <div class="sh-sub">参加コードは一度使うと無効になります。無効化すると即時アクセス遮断されます。</div>
+    ${rows||'<div class="empty">メンバーがいません</div>'}
+    <div class="sec-label">＋ メンバーを追加</div>
+    <div class="field"><input id="ma-name" placeholder="名前（例: 宮崎）"></div>
+    <div class="field"><select id="ma-role"><option value="member">メンバー</option><option value="admin">管理者</option></select></div>
+    <div class="btnrow"><button class="btn pri" onclick="memberAdd()">追加してコード発行</button></div>
+    <div class="note">🔒 退職・離任時は「無効化」を押すだけで即時遮断されます。端末紛失時は「再発行」で旧端末を失効させ、新しいコードを本人に渡してください。</div>`);
+}
+function inviteQRDataUrl(code){
+  try{
+    if(typeof qrcode!=="function") return "";
+    const base = location.origin.startsWith("http") ? location.origin+location.pathname : "";
+    if(!base || !cfg.api) return "";
+    const payload = btoa(encodeURIComponent(JSON.stringify({api:cfg.api, code:code})));
+    const qr = qrcode(0, "M");
+    qr.addData(base+"#j="+payload);
+    qr.make();
+    return qr.createDataURL(5, 8);
+  }catch(e){ return ""; }
+}
+function showInviteQR(name, code){
+  const qrUrl = inviteQRDataUrl(code);
+  openSheet(`
+    <div class="sh-title">${esc(name)} さんの招待</div>
+    <div class="codebox"><div class="code">${esc(code)}</div>
+      ${qrUrl?`<img src="${qrUrl}" alt="QR">`:`<small style="margin-top:10px">※QRはアプリを公開URLで開いている場合に表示されます</small>`}
+      <small>${qrUrl?"本人のスマホカメラでQRを読み取ると、接続情報が自動入力されます":"この参加コードを本人にだけ渡してください"}（一度使うと無効）</small></div>
+    <div class="btnrow">
+      <button class="btn pri" onclick="copyText('${esc(code)}')">コードをコピー</button>
+      <button class="btn sec" onclick="openMemberAdmin()">メンバー管理に戻る</button>
+    </div>
+    <div class="note">渡し方の推奨: QRを直接見せる・口頭・1対1のダイレクトメッセージ。全体グループへの投稿・スクショ共有は避けてください。</div>`);
+}
+async function memberAdd(){
+  const name=document.getElementById("ma-name").value.trim();
+  if(!name){ toast("名前を入力してください"); return; }
+  const role=document.getElementById("ma-role").value;
+  try{
+    const j=await api({action:"member_add", name, role});
+    showInviteQR(name, j.invite);
+  }catch(e){ toast("追加に失敗: "+e.message); }
+}
+async function memberSet(id,status){
+  try{ await api({action:"member_set", id, status}); toast(status==="disabled"?"無効化しました（即時遮断）":"有効化しました"); openMemberAdmin(); }
+  catch(e){ toast("失敗: "+e.message); }
+}
+async function memberReissue(id){
+  if(!confirm("参加コードを再発行しますか？（この人の今の端末は接続できなくなります）")) return;
+  try{
+    const j=await api({action:"member_reissue", id});
+    toast("新コード: "+j.invite+"（コピーしました）"); copyText(j.invite);
+    openMemberAdmin();
+  }catch(e){ toast("失敗: "+e.message); }
+}
+function copyText(t){
+  if(navigator.clipboard) navigator.clipboard.writeText(t).then(()=>toast("コピーしました: "+t));
+  else toast(t);
+}
+function openOrgSettings(){
+  const s=srv||{};
+  openSheet(`
+    <div class="sh-title">組織設定</div>
+    <div class="sh-sub">全メンバーに反映されます（変更は監査ログに記録）</div>
+    <div class="field"><label>組織・チーム名</label><input id="og-name" value="${esc(s.org_name||"")}"></div>
+    <div class="field"><label>勤務時間帯（この時間外は全員の位置送信が自動停止）</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="time" id="og-ws" value="${esc(s.work_start||"09:00")}" style="flex:1;border:1.5px solid var(--line);border-radius:14px;padding:10px;background:var(--field);color:var(--ink)">〜
+        <input type="time" id="og-we" value="${esc(s.work_end||"19:00")}" style="flex:1;border:1.5px solid var(--line);border-radius:14px;padding:10px;background:var(--field);color:var(--ink)">
+      </div></div>
+    <div class="field"><label>位置の表示範囲</label>
+      <select id="og-vis">
+        <option value="all" ${s.visibility!=="admin"?"selected":""}>全員がお互いに見える（Zenly型）</option>
+        <option value="admin" ${s.visibility==="admin"?"selected":""}>メンバーには管理者と自分のみ表示（管理者は全員見える）</option>
+      </select></div>
+    <div class="field"><label>チャット機能</label>
+      <select id="og-chat">
+        <option value="on" ${s.chat_enabled!=="off"?"selected":""}>ON（チーム全員のグループチャット）</option>
+        <option value="off" ${s.chat_enabled==="off"?"selected":""}>OFF（チャットタブを非表示）</option>
+      </select></div>
+    <div class="note" style="margin-top:-6px;margin-bottom:10px">※ 他社へ「ホスト型（自社運用SaaS）」で提供する場合のみ、チャットONは電気通信事業の届出が必要になります（B2B販売パック1章）。自社利用・納品型販売では届出不要です。</div>
+    <div class="field"><label>移動履歴の保存日数（1〜365日・短いほど安全）</label><input id="og-ret" type="number" min="1" max="365" value="${esc(s.retention_days||"30")}"></div>
+    <div class="btnrow"><button class="btn ghost" onclick="closeSheet()">キャンセル</button>
+    <button class="btn pri" onclick="saveOrgSettings()">保存する</button></div>
+    <div class="sec-label">同意の再取得</div>
+    <div class="note">同意事項の内容を変えた場合は、同意バージョンを上げると全員に再同意画面が表示されます。現在: v${esc(String(s.consent_version||1))}
+    <div class="btnrow"><button class="btn sec" onclick="bumpConsent()">バージョンを上げて全員に再同意を求める</button></div></div>`);
+}
+async function saveOrgSettings(){
+  try{
+    await api({action:"settings_set", settings:{
+      org_name:document.getElementById("og-name").value.trim(),
+      work_start:document.getElementById("og-ws").value,
+      work_end:document.getElementById("og-we").value,
+      visibility:document.getElementById("og-vis").value,
+      chat_enabled:document.getElementById("og-chat").value,
+      retention_days:document.getElementById("og-ret").value
+    }});
+    closeSheet(); toast("組織設定を保存しました");
+    await tick();
+  }catch(e){ toast("保存に失敗: "+e.message); }
+}
+async function bumpConsent(){
+  if(!confirm("全メンバーに再同意を求めますか？")) return;
+  try{
+    const v=Number((srv&&srv.consent_version)||1)+1;
+    await api({action:"settings_set", settings:{consent_version:String(v)}});
+    closeSheet(); toast("同意バージョンをv"+v+"に上げました"); tick();
+  }catch(e){ toast("失敗: "+e.message); }
+}
+async function openAudit(){
+  openSheet(`<div class="sh-title">監査ログ</div><div class="sh-sub">読込中…</div>`);
+  try{
+    const j=await api({action:"audit_list"});
+    const items=(j.items||[]).map(it=>`
+      <div class="audititem"><span class="when">${new Date(Number(it.ts)).toLocaleString("ja-JP",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"})}</span>
+      <span><b>${esc(it.name||"—")}</b> ${esc(auditLabel(it.action))} <span style="color:var(--sub)">${esc(it.detail||"")}</span></span></div>`).join("");
+    openSheet(`<div class="sh-title">監査ログ</div><div class="sh-sub">直近100件（180日で自動削除）</div>${items||'<div class="empty">記録なし</div>'}`);
+  }catch(e){ openSheet(`<div class="sh-title">監査ログ</div><div class="note">読込に失敗: ${esc(e.message)}</div>`); }
+}
+function auditLabel(a){
+  return {join:"参加", login_fail:"認証失敗", member_add:"メンバー追加", member_disable:"無効化", member_enable:"有効化",
+    member_role:"役割変更", member_reissue:"コード再発行", member_purge:"移動データ削除", member_set:"メンバー変更",
+    pin_del:"スポット削除", pin_bulk:"一括取込", photo_add:"写真追加", photo_del:"写真削除", settings_set:"設定変更",
+    consent:"同意", export:"データ出力", chat_del:"チャット削除"}[a]||a;
+}
+
+/* =====================================================================
+   初回セットアップ＆同意
+===================================================================== */
+function openSetup(msg){
+  document.getElementById("setup").classList.add("open");
+  const pj = pendingJoin;
+  document.getElementById("setupBody").innerHTML=`
+    <div class="setup-hero">
+      <div class="logo">マ</div>
+      <h1>マワル MAP</h1>
+      <p>チームの「いま」と訪問先が、ひとつの地図に</p><div class="rule"></div>
+    </div>
+    ${msg?`<div class="note" style="margin-bottom:12px">⚠ ${esc(msg)}</div>`:""}
+    ${pj?`<div class="note" style="margin-bottom:12px;background:#E8F8F2;color:#00795B">✅ 招待を受け取りました。名前の確認だけで参加できます。</div>`:""}
+    <div class="card">
+      <div class="field"><label>サーバーURL（管理者から共有されたURL）</label><input id="su-api" placeholder="https://script.google.com/macros/s/…/exec" value="${esc(pj?pj.api:cfg.api)}"></div>
+      <div class="field"><label>参加コード（8桁）</label><input id="su-code" placeholder="例: AB2C-D3EF" autocapitalize="characters" style="font-family:monospace;letter-spacing:.1em" value="${esc(pj?pj.code:"")}"></div>
+      <div class="field"><label>表示名（初期管理者として参加する場合のみ必須）</label><input id="su-name" placeholder="例: 宮崎" value="${esc(cfg.name)}"></div>
+      <div class="field"><label>自分の色</label><div class="colorpick" id="su-colors">${COLORS.map(c=>`<button style="background:${c}" class="${cfg.color===c?'act':''}" onclick="cfg.color='${c}';document.querySelectorAll('#su-colors button').forEach(b=>b.classList.remove('act'));this.classList.add('act')"></button>`).join("")}</div></div>
+      <div class="btnrow"><button class="btn pri" onclick="setupJoin()">参加する</button></div>
+      <div class="btnrow"><button class="btn sec" onclick="setupDemo()">まずはデモモードで見てみる</button></div>
+    </div>
+    <div class="card">
+      <div class="feat">リアルタイム位置共有（勤務時間内のみ・本人がON/OFF）</div>
+      <div class="feat">訪問先の地図・写真・メモ・訪問記録をチームで共有</div>
+      <div class="feat">訪問予定の割り当てと自動チェック</div>
+      <div class="feat">近い順ルート作成・成約率の自動集計</div>
+      <div class="feat">使い捨て参加コード・監査ログ・自動削除のセキュア設計</div>
+    </div>`;
+}
+async function setupJoin(){
+  const apiUrl=document.getElementById("su-api").value.trim();
+  const code=document.getElementById("su-code").value.trim();
+  const name=document.getElementById("su-name").value.trim();
+  if(!apiUrl||!code){ toast("サーバーURLと参加コードを入力してください"); return; }
+  toast("接続中…");
+  try{
+    const res=await fetch(apiUrl,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body:JSON.stringify({action:"join", invite:code, name, color:cfg.color, ua:navigator.userAgent.slice(0,110)})});
+    const j=await res.json();
+    if(!j.ok) throw new Error(j.error||"参加できませんでした");
+    cfg.api=apiUrl; cfg.token=j.token; cfg.demo=false; saveCfg();
+    pendingJoin=null;
+    document.getElementById("demoBanner").style.display="none";
+    applyServerPayload(j);
+    document.getElementById("setup").classList.remove("open");
+    startWatch(); startLoop();
+    toast("参加しました！ようこそ "+(j.me?j.me.name:"")+" さん");
+    if(j.me && j.me.needConsent) openConsent();
+  }catch(e){ toast("参加失敗: "+e.message); }
+}
+function setupDemo(){
+  const name=document.getElementById("su-name").value.trim();
+  cfg.name=name||"あなた"; cfg.demo=true; cfg.role="admin"; saveCfg();
+  document.getElementById("setup").classList.remove("open");
+  demoInit(); document.getElementById("demoBanner").style.display="block";
+  map.setView(DEMO.center,14);
+  srv=DEMO.settings;
+  document.getElementById("orgName").textContent=DEMO.settings.org_name;
+  document.getElementById("bulkBtn").style.display="";
+  updateChatVisibility();
+  startWatch(); startLoop();
+  if(!cfg._demoConsent) openConsent();
+}
+function openConsent(viewOnly){
+  openSheet(`
+    <div class="sh-title">位置情報の取り扱い</div>
+    <div class="consent" style="box-shadow:none;padding:4px 0">
+      ${consentText().split("\n").map(l=>l.startsWith("【")?`<h3 style="font-size:15px;margin:4px 0 8px;font-weight:900">${esc(l)}</h3>`:`<p style="margin-bottom:7px;font-size:13.5px">${esc(l)}</p>`).join("")}
+    </div>
+    ${viewOnly?
+      `<div class="btnrow"><button class="btn pri" onclick="closeSheet()">閉じる</button></div>`:
+      `<div class="btnrow"><button class="btn ghost" onclick="consentNo()">同意しない</button><button class="btn pri" onclick="consentYes()">同意してはじめる</button></div>
+       <div class="note">「同意しない」でも、地図・スポット・チャット機能は位置共有なしで利用できます。同意はいつでも設定から確認・撤回（共有停止）できます。</div>`}`);
+}
+async function consentYes(){
+  closeSheet();
+  try{ await api({action:"consent", version:(srv&&srv.consent_version)||1, ua:navigator.userAgent.slice(0,110)}); }catch(e){}
+  if(meInfo) meInfo.needConsent=false;
+  startWatch(); startLoop();
+  toast("設定完了！右上のボタンで共有を開始できます");
+}
+function consentNo(){
+  cfg.share=false; saveCfg(); closeSheet();
+  if(meInfo) meInfo.needConsent=false;
+  startLoop(); updateShareBadge();
+  toast("位置共有なしで利用します（設定からいつでも変更可）");
+}
+
+/* ---------- トースト ---------- */
+let toastTimer=null;
+function toast(msg){
+  const t=document.getElementById("toast");
+  t.textContent=msg; t.classList.add("show");
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove("show"),2800);
+}
+
+/* ---------- 起動 ---------- */
+applyTheme();
+initMap();
+if(cfg.demo){
+  demoInit(); document.getElementById("demoBanner").style.display="block";
+  map.setView(DEMO.center,14); srv=DEMO.settings;
+  document.getElementById("orgName").textContent=DEMO.settings.org_name;
+  document.getElementById("bulkBtn").style.display = cfg.role==="admin"?"":"none";
+  updateChatVisibility();
+  if(cfg.share) startWatch();
+  startLoop();
+}else if(cfg.api && cfg.token){
+  if(pendingJoin) openSetup("新しい招待を受け取りました。参加すると現在の接続は上書きされます。");
+  if(cfg.share) startWatch();
+  startLoop();
+}else if(new URLSearchParams(location.search).get("demo")){
+  // 共有URL用: ?demo=1 で開くと即デモが始まる
+  cfg.name=cfg.name||"ゲスト"; cfg.demo=true; cfg.role="admin"; saveCfg();
+  demoInit(); document.getElementById("demoBanner").style.display="block";
+  map.setView(DEMO.center,14); srv=DEMO.settings;
+  document.getElementById("orgName").textContent=DEMO.settings.org_name;
+  document.getElementById("bulkBtn").style.display="";
+  updateChatVisibility();
+  startLoop();
+  if(!cfg._demoConsent) openConsent();
+}else{
+  openSetup();
+}
+updateShareBadge();
+if("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script>
+</body>
+</html>
