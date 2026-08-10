@@ -13,7 +13,10 @@
 <link rel="preconnect" href="https://cyberjapandata.gsi.go.jp" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin="">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin=""></script>
 <script src="https://unpkg.com/qrcode-generator@1.4.4/qrcode.js" crossorigin=""></script>
 <style>
 :root{
@@ -104,6 +107,10 @@ html[data-theme="dark"] #map.tile-dark .leaflet-tile{filter:invert(1) hue-rotate
 .pinmk.done .pinmk-ic{background:#9AA4BC}
 .pinmk.rsel .pinmk-ic{outline:3px solid var(--amber)}
 .pinmk .badge{position:absolute;top:-6px;right:-4px;background:var(--mint);color:#fff;border-radius:50%;width:17px;height:17px;font-size:10px;display:flex;align-items:center;justify-content:center;border:2px solid #fff}
+/* 候補(飲食店リスト)= 小さな丸ドット。管理スポットのティアドロップと視覚的に区別 */
+.cand{width:15px;height:15px;border-radius:50%;border:2px solid #fff;box-shadow:0 2px 5px rgba(26,27,30,.35);opacity:.92}
+.marker-cluster-small,.marker-cluster-medium,.marker-cluster-large{background:rgba(26,27,30,.22)}
+.marker-cluster-small div,.marker-cluster-medium div,.marker-cluster-large div{background:rgba(26,27,30,.82);color:#fff;font-weight:700;font-family:inherit}
 
 /* ===== 下部ナビ ===== */
 #nav{position:fixed;left:12px;right:12px;bottom:calc(12px + var(--safe-b));z-index:30;border-radius:18px;box-shadow:var(--shadow);display:flex;padding:6px}
@@ -417,7 +424,7 @@ html[data-theme="dark"] .rolebadge{background:#3A2F1A}
    バックエンド: Google Apps Script + スプレッドシート（Code.gs v4.0）
 ===================================================================== */
 
-const VERSION = "5.1";
+const VERSION = "6.0";
 const COLORS = ["#3D5AFE","#FF5252","#00C896","#FF9100","#7C4DFF","#00B0FF","#F50057","#607D8B"];
 const PIN_TYPES = {
   "顧客宅":{emoji:"🏠",color:"#FF6B6B"}, "店舗":{emoji:"🍽️",color:"#FF9F43"},
@@ -442,9 +449,12 @@ function consentText(){
 /* ---------- 設定 ---------- */
 let cfg = Object.assign({
   api:"", token:"", memberId:"", name:"", role:"member", color:COLORS[0],
-  demo:false, share:false, interval:30, autoOff:true, tile:1, theme:"auto", notify:false, colorMode:"type", catFilter:""
+  demo:false, share:false, interval:30, autoOff:true, tile:1, theme:"light", notify:false, colorMode:"type", catFilter:"",
+  candOn:false, candPrio:""
 }, JSON.parse(localStorage.getItem("mawaru_cfg")||"{}"));
 function saveCfg(){ localStorage.setItem("mawaru_cfg", JSON.stringify(cfg)); }
+// テーマ初期値の変更(v6): 「自動」既定をやめ、明示的に選んでいない人はライトに一度だけ移行
+if(!cfg._thm2){ if((cfg.theme||"auto")==="auto") cfg.theme="light"; cfg._thm2=1; saveCfg(); }
 
 /* ---------- 状態 ---------- */
 let state = {members:[], pins:[], visits:[], schedules:[], products:[]};
@@ -828,10 +838,17 @@ function openMapSettings(){
     <div class="field"><label>表示する対象</label><div class="seg">
       ${cats.map(([v,l])=>`<button class="${cfg.catFilter===v?'act':''}" onclick="cfg.catFilter='${v}';saveCfg();renderPins();renderPinList();openMapSettings()">${l}</button>`).join("")}
     </div></div>
+    <div class="field"><label>飲食店リスト（候補・○ドット表示）</label><div class="seg">
+      <button class="${cfg.candOn?'act':''}" onclick="toggleCand(${cfg.candOn?"false":"true"})">${cfg.candOn?"表示中":"OFF"}</button>
+      <button class="${cfg.candPrio===''?'act':''}" onclick="cfg.candPrio='';saveCfg();renderCands(true);openMapSettings()">全優先度</button>
+      <button class="${cfg.candPrio==='A'?'act':''}" onclick="cfg.candPrio='A';saveCfg();renderCands(true);openMapSettings()">Aのみ</button>
+      <button class="${cfg.candPrio==='AB'?'act':''}" onclick="cfg.candPrio='AB';saveCfg();renderCands(true);openMapSettings()">A+B</button>
+    </div></div>
+    ${cfg.candOn?`<div class="note" style="margin:-4px 0 10px">営業リストの店が丸ドットで表示されます（赤=優先度A／橙=B／灰=C）。タップ→「スポットに登録」で訪問管理の対象になります。登録済み・NG登録済みの店は自動で消えます。</div>`:""}
     <div class="field"><label>地図の見た目</label><div class="seg">
       ${TILES.map((t,i)=>`<button class="${cfg.tile===i?'act':''}" onclick="setTile(${i});openMapSettings()">${t.name}</button>`).join("")}
     </div></div>
-    <div class="note">メンバーの現在地（GPS）は、個人宅(ToC)・法人(ToB)どちらのモードでも<b>常に表示</b>されます。切替の対象は訪問先スポットのみです。</div>
+    <div class="note">メンバーの現在地（GPS）は、個人宅(ToC)・法人(ToB)どちらのモードでも<b>常に表示</b>されます。切替の対象は訪問先スポット・候補のみです。</div>
     <div class="btnrow"><button class="btn pri" onclick="closeSheet()">閉じる</button></div>`);
 }
 function gotoMe(){
@@ -1002,6 +1019,7 @@ function renderPins(){
   document.getElementById("pinCnt").textContent=state.pins.length;
   renderAreaChips();
   renderLegend();
+  renderCands();
 }
 function renderAreaChips(){
   const areas=[...new Set(state.pins.map(p=>p.area).filter(Boolean))].sort();
@@ -1009,6 +1027,7 @@ function renderAreaChips(){
   const cat = `
     <button class="chip glass ${cfg.catFilter==='toc'?'act':''}" onclick="setCat('toc')">個人宅</button>
     <button class="chip glass ${cfg.catFilter==='tob'?'act':''}" onclick="setCat('tob')">法人</button>
+    <button class="chip glass ${cfg.candOn?'act':''}" onclick="toggleCand()" title="飲食店リスト(候補)の表示">○候補</button>
     <span style="width:1px;background:var(--line);margin:4px 2px;flex:0 0 auto"></span>`;
   el.innerHTML = cat + (areas.length? [`<button class="chip glass ${!areaFilter?'act':''}" onclick="setArea('')">すべて</button>`,
     ...areas.map(a=>`<button class="chip glass ${areaFilter===a?'act':''}" onclick="setArea('${esc(a)}')">${esc(a)} <small>${state.pins.filter(p=>p.area===a).length}</small></button>`)].join("") : "");
@@ -1017,24 +1036,137 @@ function setArea(a){ areaFilter=a; renderPins(); renderPinList(); }
 function setCat(c){
   cfg.catFilter = (cfg.catFilter===c)? "" : c;   // 同じチップ再タップで解除=すべて表示
   saveCfg();
-  renderPins(); renderPinList();
+  renderPins(); renderPinList(); renderCands(true);
   toast(cfg.catFilter==="toc"?"個人宅マップ（ToC）を表示":cfg.catFilter==="tob"?"法人マップ（ToB）を表示":"すべて表示");
 }
 function renderLegend(){
   const el=document.getElementById("legend");
   if(!el) return;
-  let items=[];
+  let html="";
   if(cfg.colorMode==="heat"){
-    items=[["0回","#9AA4BC"],["1回","#F2C14E"],["2〜3回","#F17C37"],["4回〜","#E5484D"]];
-    el.innerHTML=`<b>訪問数</b>`+items.map(([l,c])=>`<span><i style="background:${c}"></i>${l}</span>`).join("");
+    const items=[["0回","#9AA4BC"],["1回","#F2C14E"],["2〜3回","#F17C37"],["4回〜","#E5484D"]];
+    html=`<b>訪問数</b>`+items.map(([l,c])=>`<span><i style="background:${c}"></i>${l}</span>`).join("");
   }else if(cfg.colorMode==="status"){
-    items=[["成約","#0E9F6E"],["対応中","#2E5BFF"],["再訪","#E8890C"],["未訪問","#9AA4BC"],["NG","#56585E"]];
-    el.innerHTML=`<b>獲得状況</b>`+items.map(([l,c])=>`<span><i style="background:${c}"></i>${l}</span>`).join("");
+    const items=[["成約","#0E9F6E"],["対応中","#2E5BFF"],["再訪","#E8890C"],["未訪問","#9AA4BC"],["NG","#56585E"]];
+    html=`<b>獲得状況</b>`+items.map(([l,c])=>`<span><i style="background:${c}"></i>${l}</span>`).join("");
   }else if(cfg.colorMode==="prod"){
     const prs=(state.products||[]).filter(x=>x.active).slice(0,5);
-    el.innerHTML=`<b>導入商材</b>`+prs.map(pr=>`<span><i style="background:${pr.color}"></i>${esc(pr.name)}</span>`).join("")+`<span><i style="background:#9AA4BC"></i>未導入</span>`;
+    html=`<b>導入商材</b>`+prs.map(pr=>`<span><i style="background:${pr.color}"></i>${esc(pr.name)}</span>`).join("")+`<span><i style="background:#9AA4BC"></i>未導入</span>`;
   }
-  el.style.display = cfg.colorMode==="type"? "none":"flex";
+  if(cfg.candOn && cfg.catFilter!=="toc"){
+    html+=`${html?`<span style="width:1px;background:var(--line);align-self:stretch"></span>`:""}<b>候補○</b><span><i style="background:#E5484D"></i>A</span><span><i style="background:#E8890C"></i>B</span><span><i style="background:#8A8F99"></i>C</span>`;
+  }
+  el.innerHTML=html;
+  el.style.display = html? "flex":"none";
+}
+
+/* =====================================================================
+   候補レイヤー（飲食店営業リストの統合）
+   ・管理スポットとは別の「丸ドット」レイヤー（優先度色・クラスタ集約）
+   ・タップ→「スポットに登録」で管理対象へ昇格。登録済みは候補から自動非表示
+   ・データURLは組織設定 cand_url で差替可能（B2B納品時は顧客ごとのリストに）
+===================================================================== */
+const CAND_URL_DEFAULT = "https://sysmiyazaki0806-tech.github.io/m-rlphhcv7/data.js";
+const CAND_PRIO_COLOR = {A:"#E5484D", B:"#E8890C", C:"#8A8F99", "":"#8A8F99"};
+let candLayer=null, candAll=null, candLoading=false, candSig="";
+function candUrl(){
+  const u = srv && srv.cand_url;
+  if(u==="off") return "";
+  return (u && /^https:\/\//.test(u)) ? u : CAND_URL_DEFAULT;
+}
+function candPrioOf(memo){ const m=/優先度([ABC])/.exec(memo||""); return m?m[1]:""; }
+function telOf(text){ const m=/TEL[ 　]*([0-9\-]{10,13})/.exec(text||""); return m?m[1]:""; }
+function toggleCand(on){
+  cfg.candOn = (on!==undefined)? !!on : !cfg.candOn;
+  saveCfg();
+  if(cfg.candOn && !candAll) ensureCandidates();
+  else renderCands(true);
+  renderAreaChips();
+  if(document.getElementById("sheetWrap").classList.contains("open") && document.getElementById("sheetBody").innerHTML.includes("地図の表示設定")) openMapSettings();
+}
+async function ensureCandidates(){
+  if(candAll || candLoading) return;
+  const url = candUrl();
+  if(!url){ toast("この組織では候補リストが無効化されています"); cfg.candOn=false; saveCfg(); renderAreaChips(); return; }
+  candLoading=true;
+  toast("飲食店リストを読み込み中…（初回のみ・以降はオフラインでも表示）");
+  try{
+    await new Promise((res,rej)=>{
+      const sc=document.createElement("script");
+      sc.src=url; sc.onload=res; sc.onerror=rej;
+      document.head.appendChild(sc);
+    });
+    const data = window.SHOPS||[];
+    candLayer = L.markerClusterGroup({maxClusterRadius:54, disableClusteringAtZoom:17,
+      spiderfyOnMaxZoom:false, showCoverageOnHover:false, chunkedLoading:true});
+    candAll = data.map((s,i)=>{
+      const prio=candPrioOf(s[6]);
+      const mk=L.marker([s[4],s[5]],{icon:L.divIcon({className:"",iconSize:[15,15],iconAnchor:[8,8],
+        html:`<div class="cand" style="background:${CAND_PRIO_COLOR[prio]}"></div>`})});
+      mk.on("click",()=>openCandSheet(i));
+      return {mk, prio, key:s[2]+"|"+(s[3]||"")};
+    });
+    toast(data.length.toLocaleString()+"店の候補を表示します（○ドット）");
+    renderCands(true);
+  }catch(e){
+    toast("候補リストの読み込みに失敗しました（電波を確認してください）");
+    cfg.candOn=false; saveCfg(); renderAreaChips();
+  }finally{ candLoading=false; }
+}
+function renderCands(force){
+  if(!candLayer){ if(cfg.candOn && !candLoading) ensureCandidates(); return; }
+  const show = cfg.candOn && cfg.catFilter!=="toc";
+  const sig = [show, cfg.candPrio, state.pins.length].join("|");
+  if(!force && sig===candSig) return;
+  candSig=sig;
+  if(!show){ if(map.hasLayer(candLayer)) map.removeLayer(candLayer); renderLegend(); return; }
+  const pinKeys = new Set(state.pins.map(p=>p.name+"|"+(p.addr||"")));
+  const subset = candAll.filter(c=>{
+    if(pinKeys.has(c.key)) return false;
+    if(cfg.candPrio==="A" && c.prio!=="A") return false;
+    if(cfg.candPrio==="AB" && c.prio!=="A" && c.prio!=="B") return false;
+    return true;
+  }).map(c=>c.mk);
+  candLayer.clearLayers();
+  candLayer.addLayers(subset);
+  if(!map.hasLayer(candLayer)) map.addLayer(candLayer);
+  renderLegend();
+}
+function openCandSheet(i){
+  const s=(window.SHOPS||[])[i]; if(!s) return;
+  const prio=candPrioOf(s[6]);
+  const tel=telOf(s[6]);
+  openSheet(`
+    <div class="sh-title">${esc(s[2])}</div>
+    <div class="sh-sub">
+      <span class="tag" style="background:${CAND_PRIO_COLOR[prio]}1A;color:${CAND_PRIO_COLOR[prio]}">${prio?"優先度"+prio:"優先度なし"}</span>
+      <span class="tag" style="background:var(--chipbg);color:var(--sub)">${esc(s[1])}</span>
+      <span class="tag" style="background:var(--chipbg);color:var(--sub)">候補（未登録）</span>
+    </div>
+    <div class="kv"><b>住所</b><span>${esc(s[3])}</span></div>
+    <div class="kv"><b>情報</b><span>${esc(s[6])}</span></div>
+    <div class="btnrow">
+      <button class="btn pri" onclick="registerCand(${i},'未訪問')">スポットに登録</button>
+      ${tel?`<a class="btn sec" style="text-decoration:none" href="tel:${tel}">電話する</a>`:""}
+    </div>
+    <div class="btnrow">
+      <a class="btn ghost" style="text-decoration:none" href="https://www.google.com/maps/dir/?api=1&destination=${s[4]},${s[5]}" target="_blank" rel="noopener">ナビ</a>
+      <a class="btn ghost" style="text-decoration:none" href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${s[4]},${s[5]}" target="_blank" rel="noopener">外観SV</a>
+      <button class="btn ghost" onclick="registerCand(${i},'NG')">対象外(NG)</button>
+    </div>
+    <div class="note">登録すると訪問記録・成約・商材の管理対象になり、この候補ドットは消えます。閉店・対象外の店は「対象外(NG)」で登録するとチーム全員の候補から消えます。</div>`);
+}
+async function registerCand(i, status){
+  const s=(window.SHOPS||[])[i]; if(!s) return;
+  closeSheet();
+  try{
+    const j=await api({action:"pin_save", pin:{name:s[2], type:"店舗", area:s[1]||"", addr:s[3]||"",
+      lat:s[4], lng:s[5], memo:s[6]||"", status:status||"未訪問"}});
+    toast(status==="NG"?"対象外として登録しました":"スポットに登録しました");
+    await tick();
+    renderCands(true);
+    if(j && j.id && status!=="NG") openPinSheet(j.id);
+  }catch(e){ toast("登録に失敗: "+e.message); }
 }
 
 /* =====================================================================
@@ -1725,8 +1857,9 @@ function openPinSheet(id){
     <div class="btnrow">
       <button class="btn pri" onclick="openVisitForm(${p.id})">訪問を記録</button>
       <a class="btn sec" style="text-decoration:none" href="https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}" target="_blank" rel="noopener">ナビ</a>
-      <button class="btn sec" onclick="openSchedForm(${p.id})">予定</button>
+      ${telOf(p.memo)?`<a class="btn sec" style="text-decoration:none" href="tel:${telOf(p.memo)}">電話</a>`:`<button class="btn sec" onclick="openSchedForm(${p.id})">予定</button>`}
     </div>
+    ${telOf(p.memo)?`<div class="btnrow" style="margin-top:0"><button class="btn ghost" onclick="openSchedForm(${p.id})">予定に入れる</button></div>`:""}
     <div class="btnrow">
       ${chatEnabled()?`<button class="btn ghost" onclick="sharePinToChat(${p.id})">チャットに共有</button>`:""}
       <button class="btn ghost" onclick="sharePinOS(${p.id})">送る</button>
@@ -2177,6 +2310,7 @@ function openOrgSettings(){
         <option value="off" ${s.chat_enabled==="off"?"selected":""}>OFF（チャットタブを非表示）</option>
       </select></div>
     <div class="note" style="margin-top:-6px;margin-bottom:10px">※ 他社へ「ホスト型（自社運用SaaS）」で提供する場合のみ、チャットONは電気通信事業の届出が必要になります（B2B販売パック1章）。自社利用・納品型販売では届出不要です。</div>
+    <div class="field"><label>候補リストのデータURL（空=標準の飲食店リスト／off=候補機能を無効化）</label><input id="og-cand" placeholder="https://…/data.js" value="${esc(s.cand_url||"")}"></div>
     <div class="field"><label>移動履歴の保存日数（1〜365日・短いほど安全）</label><input id="og-ret" type="number" min="1" max="365" value="${esc(s.retention_days||"30")}"></div>
     <div class="btnrow"><button class="btn ghost" onclick="closeSheet()">キャンセル</button>
     <button class="btn pri" onclick="saveOrgSettings()">保存する</button></div>
@@ -2192,6 +2326,7 @@ async function saveOrgSettings(){
       work_end:document.getElementById("og-we").value,
       visibility:document.getElementById("og-vis").value,
       chat_enabled:document.getElementById("og-chat").value,
+      cand_url:document.getElementById("og-cand").value.trim(),
       retention_days:document.getElementById("og-ret").value
     }});
     closeSheet(); toast("組織設定を保存しました");
