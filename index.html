@@ -514,7 +514,11 @@ window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", app
    API 層
 ===================================================================== */
 async function api(payload){
-  if (cfg.demo) return demoApi(payload);
+  if (cfg.demo){
+    const j = await demoApi(payload);
+    if (j && j.ok===false) throw new Error(j.error||"エラー");   // 本番と同じエラー挙動
+    return j;
+  }
   if (!cfg.api) throw new Error("未接続");
   if (payload.action!=="join") payload.token = cfg.token;
   const ctl = new AbortController();
@@ -722,7 +726,7 @@ async function demoApi(p){
           prodIds.forEach(x=>{ if(!pin.prods.includes(x)) pin.prods.push(x); });
         }
       }
-      if(p.result==="成約"){   // 実績速報の自動投稿(本番と同じ挙動)
+      if(p.result==="成約" && DEMO.settings.chat_enabled==="on"){   // 実績速報の自動投稿(本番と同じ挙動)
         const nms=prodIds.map(id=>{const pr=DEMO.products.find(x=>String(x.id)===id);return pr?pr.name:null;}).filter(Boolean);
         DEMO.chat.push({id:++DEMO.seq,memberId:"me",name:cfg.name||"あなた",
           text:"🎉 実績速報："+(cfg.name||"あなた")+"さんが成約！"+(nms.length?"｜"+nms.join("・"):""),
@@ -760,6 +764,7 @@ async function demoApi(p){
     }
     case "shift_del": DEMO.shifts=DEMO.shifts.filter(s=>String(s.id)!==String(p.id)); return {ok:true};
     case "prod_add": {
+      if(DEMO.products.some(x=>x.name===p.name)) return {ok:false, error:"同名の商材が既にあります"};
       const id="p"+(++DEMO.seq);
       DEMO.products.push({id,name:p.name,color:p.color||"#2E5BFF",active:true});
       DEMO.audit.unshift({ts:Date.now(),name:cfg.name||"あなた",action:"prod_add",detail:p.name});
@@ -893,7 +898,7 @@ function openMapSettings(){
       ${modes.map(([v,l])=>`<button class="${cfg.colorMode===v?'act':''}" onclick="cfg.colorMode='${v}';saveCfg();renderPins();renderPinList();openMapSettings()">${l}</button>`).join("")}
     </div></div>
     ${cfg.colorMode==="heat"?`<div class="note" style="margin:-4px 0 10px">灰=未訪問 → 黄=1回 → 橙=2〜3回 → 赤=4回以上。回った量がひと目で分かります</div>`:""}
-    ${cfg.colorMode==="status"?`<div class="note" style="margin:-4px 0 10px">緑=成約（獲得済み）／青=対応中／橙=再訪予定／灰=未訪問／黒=NG</div>`:""}
+    ${cfg.colorMode==="status"?`<div class="note" style="margin:-4px 0 10px">緑=成約（獲得済み）／青=対応中／紫=見込み／橙=再訪予定／灰=未訪問／黒=NG</div>`:""}
     ${cfg.colorMode==="prod"?`<div class="note" style="margin:-4px 0 10px">導入済み商材の色で表示（複数導入は数字バッジ）。灰=未導入。商材の追加は 設定 → 商材管理</div>`:""}
     <div class="field"><label>表示する対象</label><div class="seg">
       ${cats.map(([v,l])=>`<button class="${cfg.catFilter===v?'act':''}" onclick="cfg.catFilter='${v}';saveCfg();renderPins();renderPinList();openMapSettings()">${l}</button>`).join("")}
@@ -1552,7 +1557,9 @@ function renderPinList(){
   const q=(document.getElementById("pinSearch").value||"").toLowerCase();
   let list=state.pins.filter(p=>(!areaFilter||p.area===areaFilter) && matchCat(p) && matchFilter(p));
   if(q) list=list.filter(p=>(p.name+p.addr+p.memo+p.area).toLowerCase().includes(q));
-  if(!list.length){ el.innerHTML=`<div class="empty"><div class="big">📌</div>スポットがありません<br>地図を長押し、または＋ボタンで追加できます</div>`; return; }
+  const fb=document.getElementById("filterBtn");
+  if(fb) fb.classList.toggle("warn", filterActive());   // 絞込適用中は赤く
+  if(!list.length){ el.innerHTML=`<div class="empty"><div class="big">📌</div>${filterActive()?"絞込条件に一致するスポットがありません<br>「絞込」から条件を解除できます":"スポットがありません<br>地図を長押し、または＋ボタンで追加できます"}</div>`; return; }
   const areas=[...new Set(list.map(p=>p.area||"未分類"))].sort();
   el.innerHTML=areas.map(a=>{
     const items=list.filter(p=>(p.area||"未分類")===a);
@@ -1797,7 +1804,8 @@ let calBase = (()=>{ const d=new Date(); d.setDate(1); d.setHours(0,0,0,0); retu
 function dstr(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function calShift(n){ calBase.setMonth(calBase.getMonth()+n); renderVisits(); }
 async function renderCalendar(el){
-  el.innerHTML = `<div class="empty">読込中…</div>`;
+  // 定期更新(tick)での再描画時は「読込中」を挟まず、完成HTMLを一括差し替え(チラつき防止)
+  if(!el.querySelector(".calgrid")) el.innerHTML = `<div class="empty">読込中…</div>`;
   let byDay = {};
   try{ const R = await getRank(); byDay = R.byDay||{}; }
   catch(e){
@@ -2088,8 +2096,8 @@ function addPinHere(){
 }
 function openPinForm(id, lat, lng){
   const p = id? state.pins.find(x=>x.id==id) : null;
-  formTypeSel = p? p.type : "顧客宅";
-  formStatusSel = p? (p.status||"未訪問") : "未訪問";
+  formTypeSel = p? (PIN_TYPES[p.type]? p.type : "その他") : "顧客宅";   // 旧「見込み」種別等はその他に読み替え
+  formStatusSel = p? (PIN_STATUS.includes(p.status)? p.status : "未訪問") : "未訪問";
   formProds = new Set((p&&p.prods)? p.prods.map(String):[]);
   const la = p? p.lat : lat, ln = p? p.lng : lng;
   const areas=[...new Set(state.pins.map(x=>x.area).filter(Boolean))];
