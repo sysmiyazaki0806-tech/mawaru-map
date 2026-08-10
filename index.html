@@ -108,7 +108,7 @@ html[data-theme="dark"] #map.tile-dark .leaflet-tile{filter:invert(1) hue-rotate
 .pinmk.rsel .pinmk-ic{outline:3px solid var(--amber)}
 .pinmk .badge{position:absolute;top:-6px;right:-4px;background:var(--mint);color:#fff;border-radius:50%;width:17px;height:17px;font-size:10px;display:flex;align-items:center;justify-content:center;border:2px solid #fff}
 /* 候補(飲食店リスト)= 小さな丸ドット。管理スポットのティアドロップと視覚的に区別 */
-.cand{width:15px;height:15px;border-radius:50%;border:2px solid #fff;box-shadow:0 2px 5px rgba(26,27,30,.35);opacity:.92}
+.cand{width:19px;height:19px;border-radius:50%;border:2.5px solid #fff;box-shadow:0 0 0 1px rgba(26,27,30,.18),0 3px 7px rgba(26,27,30,.4)}
 .marker-cluster-small,.marker-cluster-medium,.marker-cluster-large{background:rgba(26,27,30,.22)}
 .marker-cluster-small div,.marker-cluster-medium div,.marker-cluster-large div{background:rgba(26,27,30,.82);color:#fff;font-weight:700;font-family:inherit}
 
@@ -193,6 +193,21 @@ html[data-theme="dark"] .iconbtn.warn{background:#3A2028}
 #routeBar.open{display:flex}
 #routeBar b{color:var(--amber)}
 
+/* ===== カレンダー ===== */
+.calhead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:2px 2px 10px}
+.calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.calw{text-align:center;font-size:10.5px;font-weight:700;color:var(--sub);padding:2px 0}
+.calcell{background:var(--card);border:1px solid var(--line);border-radius:10px;min-height:68px;padding:4px 4px 3px;display:flex;flex-direction:column;gap:2px;cursor:pointer}
+.calcell.off{background:none;border:none;cursor:default}
+.calcell.today{border-color:var(--ink);border-width:2px}
+.calcell .cd{font-size:11px;font-weight:700}
+.cbadge{display:inline-block;color:#fff;border-radius:6px;font-size:9px;font-weight:700;padding:0 4px;line-height:1.5;align-self:flex-start}
+.cavs{display:flex;gap:2px;margin-top:auto;flex-wrap:wrap;align-items:center}
+.cavs i{width:15px;height:15px;border-radius:50%;color:#fff;font-style:normal;font-size:9px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}
+.cavs em{font-style:normal;font-size:9px;color:var(--sub);font-weight:700}
+/* 実績速報バブル */
+.bubble.fan{border:1.5px solid #F59E0B;background:linear-gradient(135deg,#FFF7E6,var(--card));color:var(--ink)}
+html[data-theme="dark"] .bubble.fan{background:linear-gradient(135deg,#33270F,var(--card))}
 /* ===== 集計 ===== */
 .statnum{display:flex;gap:8px;margin-bottom:14px;align-items:stretch}
 .statnum>div{flex:1;background:var(--field);border:1.5px solid var(--line);border-radius:16px;padding:11px 8px;text-align:center}
@@ -370,6 +385,7 @@ html[data-theme="dark"] .rolebadge{background:#3A2F1A}
 <div class="panel" id="p-pins">
   <div class="panel-h"><h2>スポット</h2><span class="cnt" id="pinCnt">0</span>
     <span style="margin-left:auto;display:flex;gap:6px">
+      <button class="iconbtn" id="filterBtn" onclick="openFilterSheet()">絞込</button>
       <button class="iconbtn" onclick="toggleRouteMode()">ルート</button>
       <button class="iconbtn" id="pinsCsvBtn" onclick="exportPinsCsv()">CSV</button>
       <button class="iconbtn" id="bulkBtn" style="display:none" onclick="openBulkImport()">取込</button>
@@ -387,6 +403,7 @@ html[data-theme="dark"] .rolebadge{background:#3A2F1A}
     </span></div>
   <div class="tabseg" id="visTabs">
     <button id="tab-sched" class="act" onclick="setVisTab('sched')">予定</button>
+    <button id="tab-cal" onclick="setVisTab('cal')">カレンダー</button>
     <button id="tab-log" onclick="setVisTab('log')">訪問ログ</button>
   </div>
   <div class="panel-body" id="visList"></div>
@@ -424,14 +441,16 @@ html[data-theme="dark"] .rolebadge{background:#3A2F1A}
    バックエンド: Google Apps Script + スプレッドシート（Code.gs v4.0）
 ===================================================================== */
 
-const VERSION = "6.0";
+const VERSION = "7.0";
 const COLORS = ["#3D5AFE","#FF5252","#00C896","#FF9100","#7C4DFF","#00B0FF","#F50057","#607D8B"];
 const PIN_TYPES = {
   "顧客宅":{emoji:"🏠",color:"#FF6B6B"}, "店舗":{emoji:"🍽️",color:"#FF9F43"},
-  "見込み":{emoji:"⭐",color:"#FFC531"}, "取引先":{emoji:"🤝",color:"#00C896"},
+  "取引先":{emoji:"🤝",color:"#00C896"},
   "拠点":{emoji:"🏢",color:"#3D5AFE"}, "その他":{emoji:"📍",color:"#8E9BB5"}
 };
-const PIN_STATUS = ["未訪問","対応中","成約","再訪予定","NG"];
+const TYPE_FALLBACK = {"見込み":"その他"};   // 旧「見込み」種別のデータはその他として扱う(v7で種別→ステータスへ移行)
+const PIN_STATUS = ["未訪問","見込み","対応中","再訪予定","成約","NG"];
+const STATUS_COLOR = {"未訪問":"#9AA4BC","見込み":"#8B5CF6","対応中":"#2E5BFF","再訪予定":"#E8890C","成約":"#0E9F6E","NG":"#56585E"};
 const VISIT_RESULTS = ["在宅・面談","不在","成約","再訪約束","NG","チラシ投函","その他"];
 const PH_PLACEHOLDER = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="110" height="110"><rect width="110" height="110" rx="16" fill="#E8ECFA"/><text x="55" y="62" font-size="26" text-anchor="middle">🖼️</text></svg>');
 
@@ -457,7 +476,7 @@ function saveCfg(){ localStorage.setItem("mawaru_cfg", JSON.stringify(cfg)); }
 if(!cfg._thm2){ if((cfg.theme||"auto")==="auto") cfg.theme="light"; cfg._thm2=1; saveCfg(); }
 
 /* ---------- 状態 ---------- */
-let state = {members:[], pins:[], visits:[], schedules:[], products:[]};
+let state = {members:[], pins:[], visits:[], schedules:[], products:[], shifts:[]};
 let srv = null, meInfo = null;
 let map, tileLayer, memberLayer, pinLayer, trailLayer;
 let myPos=null, myBattery=null, mySpeed=null, myHeading=null, watchId=null, pollTimer=null, chatTimer=null;
@@ -565,7 +584,7 @@ async function outboxFlush(){
 /* =====================================================================
    デモモード
 ===================================================================== */
-const DEMO = {center:[34.7025,135.4959], members:{}, roster:[], pins:[], visits:[], chat:[], schedules:[], audit:[], seq:500, trails:{},
+const DEMO = {center:[34.7025,135.4959], members:{}, roster:[], pins:[], visits:[], chat:[], schedules:[], shifts:[], audit:[], seq:500, trails:{},
   products:[{id:"p1",name:"固定・Wi-Fi",color:"#2E5BFF",active:true},{id:"p2",name:"フォーム入力",color:"#0E9F6E",active:true},{id:"p3",name:"電気",color:"#E8890C",active:true}],
   settings:{org_name:"デモ株式会社 営業部", work_start:"09:00", work_end:"19:00", visibility:"all", retention_days:"30", consent_version:1, chat_enabled:"on"}};
 function todayStr(offset){
@@ -612,6 +631,13 @@ function demoInit(){
     {id:43,pinId:11,pinName:"山本様邸",assignee:"佐藤",date:todayStr(0),done:true,by:"小島"},
     {id:44,pinId:14,pinName:"伊藤様邸",assignee:"田中",date:todayStr(1),done:false,by:"小島"}
   ];
+  DEMO.shifts=[
+    {id:51,date:todayStr(0),name:meName,label:"終日"},
+    {id:52,date:todayStr(0),name:"小島",label:"梅田"},
+    {id:53,date:todayStr(1),name:"田中",label:"AM"},
+    {id:54,date:todayStr(1),name:"佐藤",label:""},
+    {id:55,date:todayStr(3),name:meName,label:"福島"}
+  ];
   DEMO.chat=[
     {id:31,memberId:1,name:"小島",text:"おはようございます！今日は梅田エリアから回ります",pinId:null,lat:null,lng:null,ts:now-3600e3*3},
     {id:32,memberId:3,name:"佐藤",text:"👍",pinId:null,lat:null,lng:null,ts:now-3600e3*2.8},
@@ -645,7 +671,7 @@ function demoPayload(){
   return {ok:true,
     state:{members, pins:DEMO.pins, visits:DEMO.visits.slice().sort((a,b)=>b.ts-a.ts),
       chat: DEMO.settings.chat_enabled==="on"? DEMO.chat.slice(-50):[],
-      schedules: DEMO.schedules.slice(), products: DEMO.products.slice()},
+      schedules: DEMO.schedules.slice(), products: DEMO.products.slice(), shifts: DEMO.shifts.slice()},
     me:{id:"me",name:cfg.name||"あなた",role:"admin",color:cfg.color,needConsent:!cfg._demoConsent},
     settings:{...DEMO.settings, app_version:VERSION}};
 }
@@ -696,9 +722,43 @@ async function demoApi(p){
           prodIds.forEach(x=>{ if(!pin.prods.includes(x)) pin.prods.push(x); });
         }
       }
+      if(p.result==="成約"){   // 実績速報の自動投稿(本番と同じ挙動)
+        const nms=prodIds.map(id=>{const pr=DEMO.products.find(x=>String(x.id)===id);return pr?pr.name:null;}).filter(Boolean);
+        DEMO.chat.push({id:++DEMO.seq,memberId:"me",name:cfg.name||"あなた",
+          text:"🎉 実績速報："+(cfg.name||"あなた")+"さんが成約！"+(nms.length?"｜"+nms.join("・"):""),
+          pinId:p.pinId,lat:null,lng:null,ts:Date.now()});
+      }
       DEMO.schedules.forEach(s=>{ if(s.pinId==p.pinId && s.date===todayStr(0) && !s.done && (s.assignee===(cfg.name||"あなた")||!s.assignee)) s.done=true; });
       return {ok:true};
     }
+    case "rank": {
+      const now=new Date(); const today=todayStr(0);
+      const dow=(now.getDay()+6)%7; const weekStart=todayStr(-dow);
+      const ym=today.slice(0,7), yy=today.slice(0,4);
+      const mk=()=>({members:{},products:{},visits:0,won:0});
+      const P={today:mk(),week:mk(),month:mk(),year:mk()};
+      const byDay={};
+      DEMO.visits.forEach(v=>{
+        const ds=dstr(new Date(v.ts)); const won=v.result==="成約";
+        const o=byDay[ds]||(byDay[ds]={v:0,w:0}); o.v++; if(won)o.w++;
+        const tgt=[];
+        if(ds===today)tgt.push(P.today);
+        if(ds>=weekStart&&ds<=today)tgt.push(P.week);
+        if(ds.slice(0,7)===ym)tgt.push(P.month);
+        if(ds.slice(0,4)===yy)tgt.push(P.year);
+        tgt.forEach(t=>{
+          t.visits++; const mm=t.members[v.by]||(t.members[v.by]={v:0,w:0}); mm.v++;
+          if(won){ t.won++; mm.w++; (v.products||[]).forEach(pid=>{ t.products[pid]=(t.products[pid]||0)+1; }); }
+        });
+      });
+      return {ok:true, rank:P, byDay:byDay, today:today, weekStart:weekStart};
+    }
+    case "shift_add": {
+      if(DEMO.shifts.some(s=>s.date===p.date&&s.name===p.name)) return {ok:false,error:"同じ日に登録済みです"};
+      DEMO.shifts.push({id:++DEMO.seq,date:p.date,name:p.name,label:p.label||""});
+      return {ok:true};
+    }
+    case "shift_del": DEMO.shifts=DEMO.shifts.filter(s=>String(s.id)!==String(p.id)); return {ok:true};
     case "prod_add": {
       const id="p"+(++DEMO.seq);
       DEMO.products.push({id,name:p.name,color:p.color||"#2E5BFF",active:true});
@@ -891,6 +951,32 @@ function matchCat(p){
   return true;
 }
 function prodOf(id){ return (state.products||[]).find(x=>String(x.id)===String(id)); }
+/* ---------- 絞り込みフィルタ(ステータス×種別×導入商材) ---------- */
+let pinFilter = {status:"", type:"", prod:""};
+function filterActive(){ return !!(pinFilter.status||pinFilter.type||pinFilter.prod); }
+function matchFilter(p){
+  if(pinFilter.status && (p.status||"未訪問")!==pinFilter.status) return false;
+  if(pinFilter.type && p.type!==pinFilter.type) return false;
+  if(pinFilter.prod && !(p.prods||[]).map(String).includes(String(pinFilter.prod))) return false;
+  return true;
+}
+function clearFilter(){ pinFilter={status:"",type:"",prod:""}; renderPins(); renderPinList(); toast("絞り込みを解除しました"); }
+function openFilterSheet(){
+  const seg=(items,cur,set)=>items.map(([v,l,c])=>
+    `<button class="${cur===v?'act':''}" ${c&&cur===v?`style="background:${c};border-color:${c};color:#fff"`:""} onclick="pinFilter.${set}=pinFilter.${set}==='${v}'?'':'${v}';renderPins();renderPinList();openFilterSheet()">${l}</button>`).join("");
+  const prs=(state.products||[]).filter(x=>x.active);
+  openSheet(`
+    <div class="sh-title">スポットの絞り込み</div>
+    <div class="sh-sub">地図と一覧の両方に反映されます（同じボタンをもう一度押すと解除）</div>
+    <div class="field"><label>ステータス</label><div class="seg">${seg(PIN_STATUS.map(s=>[s,s,STATUS_COLOR[s]]), pinFilter.status, "status")}</div></div>
+    <div class="field"><label>種別</label><div class="seg">${seg(Object.keys(PIN_TYPES).map(t=>[t,PIN_TYPES[t].emoji+" "+t,null]), pinFilter.type, "type")}</div></div>
+    <div class="field"><label>導入済み商材</label><div class="seg">${prs.length?seg(prs.map(pr=>[String(pr.id),pr.name,pr.color]), pinFilter.prod, "prod"):'<span style="font-size:12px;color:var(--sub)">商材が未登録です</span>'}</div></div>
+    <div class="btnrow">
+      <button class="btn ghost" onclick="clearFilter();openFilterSheet()">すべて解除</button>
+      <button class="btn pri" onclick="closeSheet()">この条件で表示</button>
+    </div>
+    <div class="note">例:「成約 × 固定・Wi-Fi」=その商材の導入先だけ表示 ／「見込み」=追いかけ先だけ表示。エリアチップ・個人宅/法人と組み合わせられます。</div>`);
+}
 function prodChipsHtml(ids, small){
   if(!ids||!ids.length) return "";
   return ids.map(id=>{
@@ -905,9 +991,7 @@ function heatColor(n){
   if(n<=3) return "#F17C37";
   return "#E5484D";
 }
-function statusColor(s){
-  return {"成約":"#0E9F6E","対応中":"#2E5BFF","再訪予定":"#E8890C","未訪問":"#9AA4BC","NG":"#56585E"}[s]||"#9AA4BC";
-}
+function statusColor(s){ return STATUS_COLOR[s]||"#9AA4BC"; }
 function pinColorFor(p){
   const t=PIN_TYPES[p.type]||PIN_TYPES["その他"];
   switch(cfg.colorMode){
@@ -987,7 +1071,7 @@ function pinBadge(p){
 const CULL_THRESHOLD = 400;   // これを超えるピン数は画面内のみ描画(飲食店リスト等の大量データ対応)
 function renderPins(){
   const seen = new Set();
-  let list = state.pins.filter(p=> (!areaFilter||p.area===areaFilter) && matchCat(p));
+  let list = state.pins.filter(p=> (!areaFilter||p.area===areaFilter) && matchCat(p) && matchFilter(p));
   if(list.length>CULL_THRESHOLD && map){
     const b = map.getBounds().pad(0.25);
     list = list.filter(p=> p.lat>=b.getSouth()&&p.lat<=b.getNorth()&&p.lng>=b.getWest()&&p.lng<=b.getEast());
@@ -1024,10 +1108,12 @@ function renderPins(){
 function renderAreaChips(){
   const areas=[...new Set(state.pins.map(p=>p.area).filter(Boolean))].sort();
   const el=document.getElementById("areaChips");
+  const filtLabel = [pinFilter.status, pinFilter.type, (prodOf(pinFilter.prod)||{}).name].filter(Boolean).join("・");
   const cat = `
     <button class="chip glass ${cfg.catFilter==='toc'?'act':''}" onclick="setCat('toc')">個人宅</button>
     <button class="chip glass ${cfg.catFilter==='tob'?'act':''}" onclick="setCat('tob')">法人</button>
     <button class="chip glass ${cfg.candOn?'act':''}" onclick="toggleCand()" title="飲食店リスト(候補)の表示">○候補</button>
+    ${filterActive()?`<button class="chip glass act" style="background:#8B5CF6;border-color:#8B5CF6" onclick="clearFilter()">絞込: ${esc(filtLabel)} ✕</button>`:""}
     <span style="width:1px;background:var(--line);margin:4px 2px;flex:0 0 auto"></span>`;
   el.innerHTML = cat + (areas.length? [`<button class="chip glass ${!areaFilter?'act':''}" onclick="setArea('')">すべて</button>`,
     ...areas.map(a=>`<button class="chip glass ${areaFilter===a?'act':''}" onclick="setArea('${esc(a)}')">${esc(a)} <small>${state.pins.filter(p=>p.area===a).length}</small></button>`)].join("") : "");
@@ -1047,14 +1133,14 @@ function renderLegend(){
     const items=[["0回","#9AA4BC"],["1回","#F2C14E"],["2〜3回","#F17C37"],["4回〜","#E5484D"]];
     html=`<b>訪問数</b>`+items.map(([l,c])=>`<span><i style="background:${c}"></i>${l}</span>`).join("");
   }else if(cfg.colorMode==="status"){
-    const items=[["成約","#0E9F6E"],["対応中","#2E5BFF"],["再訪","#E8890C"],["未訪問","#9AA4BC"],["NG","#56585E"]];
+    const items=[["成約","#0E9F6E"],["対応中","#2E5BFF"],["見込み","#8B5CF6"],["再訪","#E8890C"],["未訪問","#9AA4BC"],["NG","#56585E"]];
     html=`<b>獲得状況</b>`+items.map(([l,c])=>`<span><i style="background:${c}"></i>${l}</span>`).join("");
   }else if(cfg.colorMode==="prod"){
     const prs=(state.products||[]).filter(x=>x.active).slice(0,5);
     html=`<b>導入商材</b>`+prs.map(pr=>`<span><i style="background:${pr.color}"></i>${esc(pr.name)}</span>`).join("")+`<span><i style="background:#9AA4BC"></i>未導入</span>`;
   }
   if(cfg.candOn && cfg.catFilter!=="toc"){
-    html+=`${html?`<span style="width:1px;background:var(--line);align-self:stretch"></span>`:""}<b>候補○</b><span><i style="background:#E5484D"></i>A</span><span><i style="background:#E8890C"></i>B</span><span><i style="background:#8A8F99"></i>C</span>`;
+    html+=`${html?`<span style="width:1px;background:var(--line);align-self:stretch"></span>`:""}<b>候補○</b><span><i style="background:#E5484D"></i>A</span><span><i style="background:#F59E0B"></i>B</span><span><i style="background:#0E9F8E"></i>C</span>`;
   }
   el.innerHTML=html;
   el.style.display = html? "flex":"none";
@@ -1067,7 +1153,7 @@ function renderLegend(){
    ・データURLは組織設定 cand_url で差替可能（B2B納品時は顧客ごとのリストに）
 ===================================================================== */
 const CAND_URL_DEFAULT = "https://sysmiyazaki0806-tech.github.io/m-rlphhcv7/data.js";
-const CAND_PRIO_COLOR = {A:"#E5484D", B:"#E8890C", C:"#8A8F99", "":"#8A8F99"};
+const CAND_PRIO_COLOR = {A:"#E5484D", B:"#F59E0B", C:"#0E9F8E", "":"#0E9F8E"};   // A赤/B橙/Cティール(淡色地図で視認しやすい発色)
 let candLayer=null, candAll=null, candLoading=false, candSig="";
 function candUrl(){
   const u = srv && srv.cand_url;
@@ -1101,7 +1187,7 @@ async function ensureCandidates(){
       spiderfyOnMaxZoom:false, showCoverageOnHover:false, chunkedLoading:true});
     candAll = data.map((s,i)=>{
       const prio=candPrioOf(s[6]);
-      const mk=L.marker([s[4],s[5]],{icon:L.divIcon({className:"",iconSize:[15,15],iconAnchor:[8,8],
+      const mk=L.marker([s[4],s[5]],{icon:L.divIcon({className:"",iconSize:[19,19],iconAnchor:[10,10],
         html:`<div class="cand" style="background:${CAND_PRIO_COLOR[prio]}"></div>`})});
       mk.on("click",()=>openCandSheet(i));
       return {mk, prio, key:s[2]+"|"+(s[3]||"")};
@@ -1313,6 +1399,7 @@ function renderChat(){
     const mine = String(m.memberId)===String(cfg.memberId||"me");
     const color = memberColor(m.memberId, m.name);
     const onlyEmoji = m.text && m.text.length<=2 && /\p{Extended_Pictographic}/u.test(m.text);
+    const fan = m.text && m.text.indexOf("🎉 実績速報")===0;
     let attach="";
     if(m.pinId){
       const p=state.pins.find(x=>String(x.id)===String(m.pinId));
@@ -1326,7 +1413,7 @@ function renderChat(){
       ${mine?"":`<div class="msg-av" style="background:${esc(color)}">${esc((m.name||"?").slice(0,1))}</div>`}
       <div class="msg-body">
         ${mine?"":`<div class="msg-name">${esc(m.name)}</div>`}
-        ${m.text?`<div class="bubble ${onlyEmoji?'big':''}">${esc(m.text)}</div>`:""}
+        ${m.text?`<div class="bubble ${onlyEmoji?'big':''} ${fan?'fan':''}">${esc(m.text)}</div>`:""}
         ${attach}
         <div class="msg-meta">${fmtTime(m.ts)}${canDel?`<button onclick="delMsg('${esc(String(m.id))}')">削除</button>`:""}</div>
       </div></div>`;
@@ -1457,13 +1544,13 @@ async function showTrail(id, name){
 
 /* ---------- スポット一覧＋ルート ---------- */
 function statusTag(s){
-  const c={"未訪問":"#8E9BB5","対応中":"#3D5AFE","成約":"#00C896","再訪予定":"#FF9100","NG":"#FF5252"}[s]||"#8E9BB5";
+  const c=STATUS_COLOR[s]||"#9AA4BC";
   return `<span class="tag" style="background:${c}1A;color:${c}">${esc(s||"未訪問")}</span>`;
 }
 function renderPinList(){
   const el=document.getElementById("pinList"); if(!el) return;
   const q=(document.getElementById("pinSearch").value||"").toLowerCase();
-  let list=state.pins.filter(p=>(!areaFilter||p.area===areaFilter) && matchCat(p));
+  let list=state.pins.filter(p=>(!areaFilter||p.area===areaFilter) && matchCat(p) && matchFilter(p));
   if(q) list=list.filter(p=>(p.name+p.addr+p.memo+p.area).toLowerCase().includes(q));
   if(!list.length){ el.innerHTML=`<div class="empty"><div class="big">📌</div>スポットがありません<br>地図を長押し、または＋ボタンで追加できます</div>`; return; }
   const areas=[...new Set(list.map(p=>p.area||"未分類"))].sort();
@@ -1588,6 +1675,7 @@ async function runBulkImport(){
 function setVisTab(t){
   visTab=t;
   document.getElementById("tab-sched").classList.toggle("act",t==="sched");
+  document.getElementById("tab-cal").classList.toggle("act",t==="cal");
   document.getElementById("tab-log").classList.toggle("act",t==="log");
   renderVisits();
 }
@@ -1612,6 +1700,7 @@ function renderVisits(){
   document.getElementById("visCnt").textContent = visTab==="sched" ? (state.schedules||[]).filter(s=>!s.done).length : vs.length;
 
   if(visTab==="sched"){ renderSchedList(el); return; }
+  if(visTab==="cal"){ renderCalendar(el); return; }
 
   if(!vs.length){ el.innerHTML=`<div class="empty"><div class="big">👣</div>訪問ログはまだありません<br>スポット詳細の「訪問を記録」から残せます</div>`; return; }
   const today=new Date(); today.setHours(0,0,0,0);
@@ -1703,54 +1792,157 @@ async function saveSched(pinId){
   }catch(e){ toast("登録に失敗: "+e.message); }
 }
 
-/* ---------- 集計 ---------- */
-let statsDays=1;
-function openStats(){ statsDays=1; renderStats(); }
-function renderStats(){
-  const now=Date.now();
-  const dayStart=new Date(); dayStart.setHours(0,0,0,0);
-  const from = statsDays===1? dayStart.getTime() : now-statsDays*86400e3;
-  const vs=(state.visits||[]).filter(v=>v.ts>=from);
-  const total=vs.length;
+/* ---------- カレンダー(チーム実績＋シフト管理) ---------- */
+let calBase = (()=>{ const d=new Date(); d.setDate(1); d.setHours(0,0,0,0); return d; })();
+function dstr(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function calShift(n){ calBase.setMonth(calBase.getMonth()+n); renderVisits(); }
+async function renderCalendar(el){
+  el.innerHTML = `<div class="empty">読込中…</div>`;
+  let byDay = {};
+  try{ const R = await getRank(); byDay = R.byDay||{}; }
+  catch(e){
+    (state.visits||[]).forEach(v=>{ const ds=dstr(new Date(v.ts)); const o=byDay[ds]||(byDay[ds]={v:0,w:0}); o.v++; if(v.result==="成約")o.w++; });
+  }
+  const y=calBase.getFullYear(), m=calBase.getMonth();
+  const startDow=(new Date(y,m,1).getDay()+6)%7;   // 月曜始まり
+  const days=new Date(y,m+1,0).getDate();
+  const today=todayStr(0);
+  const shiftsByDay={};
+  (state.shifts||[]).forEach(s=>{ (shiftsByDay[s.date]=shiftsByDay[s.date]||[]).push(s); });
+  const schedByDay={};
+  (state.schedules||[]).forEach(s=>{ if(!s.done) schedByDay[s.date]=(schedByDay[s.date]||0)+1; });
+  let cells="";
+  for(let i=0;i<startDow;i++) cells+=`<div class="calcell off"></div>`;
+  for(let d=1;d<=days;d++){
+    const ds=`${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    const bd=byDay[ds], sh=shiftsByDay[ds]||[], sc=schedByDay[ds]||0;
+    cells+=`<div class="calcell ${ds===today?'today':''}" onclick="openDaySheet('${ds}')">
+      <div class="cd">${d}</div>
+      ${bd&&bd.w?`<span class="cbadge" style="background:#0E9F6E">成${bd.w}</span>`:(bd&&bd.v?`<span class="cbadge" style="background:#9AA4BC">訪${bd.v}</span>`:"")}
+      ${sc?`<span class="cbadge" style="background:#8B5CF6">予${sc}</span>`:""}
+      <div class="cavs">${sh.slice(0,3).map(s=>`<i style="background:${memberColor(null,s.name)}">${esc((s.name||"?").slice(0,1))}</i>`).join("")}${sh.length>3?`<em>+${sh.length-3}</em>`:""}</div>
+    </div>`;
+  }
+  el.innerHTML=`
+    <div class="calhead">
+      <button class="iconbtn" onclick="calShift(-1)">‹ 前月</button>
+      <b style="font-size:16px">${y}年 ${m+1}月</b>
+      <button class="iconbtn" onclick="calShift(1)">翌月 ›</button>
+    </div>
+    <div class="calgrid">
+      ${["月","火","水","木","金","土","日"].map(w=>`<div class="calw">${w}</div>`).join("")}
+      ${cells}
+    </div>
+    <div class="note" style="margin-top:10px">緑=成約数 ／ 灰=訪問数 ／ 紫=未完了の予定 ／ 下の丸=シフト。日付をタップすると詳細${cfg.role==="admin"?"とシフト編集":""}が開きます。実績バッジは直近62日分に表示されます。</div>`;
+}
+function openDaySheet(ds){
+  const d=new Date(ds+"T00:00:00");
+  const w=["日","月","火","水","木","金","土"][d.getDay()];
+  const sh=(state.shifts||[]).filter(s=>s.date===ds);
+  const vs=(state.visits||[]).filter(v=>dstr(new Date(v.ts))===ds).sort((a,b)=>b.ts-a.ts);
   const won=vs.filter(v=>v.result==="成約").length;
-  const rate= total? Math.round(won/total*100):0;
-  const byResult={}, byMember={}, byProd={}, prodColor={};
-  vs.forEach(v=>{
-    byResult[v.result]=(byResult[v.result]||0)+1;
-    byMember[v.by]=(byMember[v.by]||0)+1;
-    if(v.result==="成約") (v.products||[]).forEach(id=>{
-      const pr=prodOf(id); const nm=pr?pr.name:"不明";
-      byProd[nm]=(byProd[nm]||0)+1; prodColor[nm]=pr?pr.color:"#9AA4BC";
-    });
-  });
-  const rc={"成約":"#00C896","NG":"#FF5252","不在":"#8E9BB5","在宅・面談":"#3D5AFE","再訪約束":"#FF9100","チラシ投函":"#7C4DFF","その他":"#607D8B"};
-  const maxR=Math.max(1,...Object.values(byResult));
-  const maxM=Math.max(1,...Object.values(byMember));
-  const bars=(obj,max,colorFn)=>Object.entries(obj).sort((a,b)=>b[1]-a[1]).map(([k,v])=>
-    `<div class="barrow"><div class="lbl">${esc(k)}</div><div class="track"><div class="fill" style="width:${Math.round(v/max*100)}%;background:${colorFn(k)}"></div></div><div class="val">${v}</div></div>`).join("");
+  const sc=(state.schedules||[]).filter(s=>s.date===ds);
+  const names=[...new Set(state.members.map(mm=>mm.name))];
+  const isAdmin=cfg.role==="admin";
   openSheet(`
-    <div class="sh-title">訪問集計</div>
-    <div class="sh-sub">直近${(state.visits||[]).length>=300?"300件（それ以前はスプレッドシート参照）":"の全記録"}から集計</div>
+    <div class="sh-title">${d.getMonth()+1}/${d.getDate()}（${w}）</div>
+    <div class="sh-sub">${won?`成約${won}件 ・ `:""}訪問${vs.length}件 ・ シフト${sh.length}人</div>
+    <div class="sec-label">シフト</div>
+    ${sh.length? sh.map(s=>`<div class="schrow card" style="padding:10px 14px">
+        <span class="msg-av" style="background:${memberColor(null,s.name)};width:28px;height:28px;font-size:12px">${esc((s.name||"?").slice(0,1))}</span>
+        <div class="t"><b>${esc(s.name)}</b>${s.label?`<small>${esc(s.label)}</small>`:""}</div>
+        ${isAdmin?`<button class="del" onclick="shiftDel('${esc(String(s.id))}','${ds}')">✕</button>`:""}
+      </div>`).join("") : '<div class="empty" style="padding:12px">シフト未設定</div>'}
+    ${isAdmin?`
+    <div style="display:flex;gap:6px;margin:8px 0 4px">
+      <select id="sf-name" style="flex:1;border:1.5px solid var(--line);border-radius:11px;padding:9px;background:var(--field);color:var(--ink)">
+        ${names.map(n=>`<option>${esc(n)}</option>`).join("")}</select>
+      <input id="sf-label" placeholder="例: 終日/AM/梅田" style="flex:1;border:1.5px solid var(--line);border-radius:11px;padding:9px;background:var(--field)">
+      <button class="iconbtn" onclick="shiftAdd('${ds}')">＋追加</button>
+    </div>`:""}
+    ${sc.length?`<div class="sec-label">この日の予定</div>${sc.map(s=>`<div class="vh"><span>${s.done?"✅":"⬜"}</span><b>${esc(s.pinName)}</b><span class="who" style="font-size:10px">${esc(s.assignee||"誰でも")}</span></div>`).join("")}`:""}
+    ${vs.length?`<div class="sec-label">この日の実績（直近データより）</div>${vs.slice(0,12).map(v=>`<div class="vh"><span class="when">${fmtTime(v.ts)}</span><b style="color:${STATUS_COLOR[v.result==="成約"?"成約":"未訪問"]}">${esc(v.result)}</b><span>${esc(v.pinName)}</span><span style="color:var(--sub)">${esc(v.by)}</span></div>`).join("")}`:""}
+    <div class="btnrow"><button class="btn pri" onclick="closeSheet()">閉じる</button></div>`);
+}
+async function shiftAdd(ds){
+  const name=document.getElementById("sf-name").value;
+  const label=document.getElementById("sf-label").value.trim();
+  try{
+    await api({action:"shift_add", date:ds, name, label});
+    await tick();
+    openDaySheet(ds);
+    toast(name+"さんを"+ds.slice(5).replace("-","/")+"のシフトに追加しました");
+  }catch(e){ toast("追加に失敗: "+e.message); }
+}
+async function shiftDel(id, ds){
+  try{
+    await api({action:"shift_del", id});
+    await tick();
+    openDaySheet(ds);
+  }catch(e){ toast("削除に失敗: "+e.message); }
+}
+
+/* ---------- 実績・ランキング(サーバー全期間集計。チャットの実績速報とも連動) ---------- */
+let statsPeriod="today", rankData=null, rankTs=0;
+async function getRank(force){
+  if(!force && rankData && Date.now()-rankTs<60e3) return rankData;
+  const j = await api({action:"rank"});
+  rankData=j; rankTs=Date.now();
+  return j;
+}
+function openStats(){ statsPeriod="today"; renderStats(); }
+async function renderStats(){
+  openSheet(`<div class="sh-title">実績・ランキング</div><div class="sh-sub">集計中…</div>`);
+  let R=null;
+  try{ R=await getRank(); }catch(e){}
+  if(!R || !R.rank){
+    openSheet(`<div class="sh-title">実績・ランキング</div><div class="note">集計データを取得できませんでした（電波状況、またはサーバーがv7未満の可能性）。</div>
+      <div class="btnrow"><button class="btn pri" onclick="renderStats()">再試行</button></div>`);
+    return;
+  }
+  const P = R.rank[statsPeriod] || {members:{},products:{},visits:0,won:0};
+  const rate = P.visits? Math.round(P.won/P.visits*100):0;
+  const PERIODS=[["today","今日"],["week","今週"],["month","今月"],["year","今年"]];
+  // ランキング(成約数→訪問数の順で並べ、メダル表示)
+  const rows = Object.entries(P.members).map(([nm,o])=>({nm,w:o.w,v:o.v}))
+    .sort((a,b)=> b.w-a.w || b.v-a.v);
+  const maxW = Math.max(1,...rows.map(r=>r.w), 1);
+  const medals=["🥇","🥈","🥉"];
+  const rankHtml = rows.length? rows.map((r,i)=>`
+    <div class="barrow" style="margin:8px 0">
+      <div class="lbl" style="width:110px;display:flex;align-items:center;gap:6px">
+        <span style="width:22px;text-align:center;font-size:${i<3?"16px":"12px"};font-weight:800">${medals[i]||(i+1)+"位"}</span>
+        <span style="overflow:hidden;text-overflow:ellipsis">${esc(r.nm)}</span></div>
+      <div class="track" style="height:17px"><div class="fill" style="width:${Math.round(r.w/maxW*100)}%;background:${memberColor(null,r.nm)}"></div></div>
+      <div class="val" style="width:74px;font-size:11.5px">${r.w}成約/${r.v}訪</div>
+    </div>`).join("") : '<div class="empty" style="padding:16px">この期間の実績はまだありません</div>';
+  // 商材別成約
+  const prodRows = Object.entries(P.products).map(([pid,n])=>{const pr=prodOf(pid);return {nm:pr?pr.name:"不明", c:pr?pr.color:"#9AA4BC", n};})
+    .sort((a,b)=>b.n-a.n);
+  const maxP = Math.max(1,...prodRows.map(r=>r.n),1);
+  const prodHtml = prodRows.map(r=>`
+    <div class="barrow"><div class="lbl">${esc(r.nm)}</div><div class="track"><div class="fill" style="width:${Math.round(r.n/maxP*100)}%;background:${r.c}"></div></div><div class="val">${r.n}</div></div>`).join("");
+  openSheet(`
+    <div class="sh-title">実績・ランキング</div>
+    <div class="sh-sub">成約の訪問記録から自動集計（チャットの実績速報🎉と同じデータ）</div>
     <div class="seg" style="margin-bottom:12px">
-      ${[["今日",1],["7日間",7],["30日間",30]].map(([l,d])=>`<button class="${statsDays===d?'act':''}" onclick="statsDays=${d};renderStats()">${l}</button>`).join("")}
+      ${PERIODS.map(([v,l])=>`<button class="${statsPeriod===v?'act':''}" onclick="statsPeriod='${v}';renderStats()">${l}</button>`).join("")}
     </div>
     <div class="donutwrap">
       <div class="donut" style="background:conic-gradient(var(--mint) ${rate*3.6}deg, var(--line) 0)"><span>${rate}%</span></div>
       <div style="flex:1">
-        <div style="font-weight:900;font-size:15px">成約率</div>
-        <div style="font-size:12.5px;color:var(--sub);font-weight:700">${total}件の訪問のうち ${won}件が成約</div>
+        <div style="font-weight:700;font-size:15px">成約率（${PERIODS.find(x=>x[0]===statsPeriod)[1]}）</div>
+        <div style="font-size:12.5px;color:var(--sub);font-weight:600">${P.visits}件の訪問のうち ${P.won}件が成約</div>
       </div>
     </div>
     <div class="statnum">
-      <div><b>${total}</b><small>訪問</small></div>
-      <div><b style="color:var(--mint)">${won}</b><small>成約</small></div>
+      <div><b>${P.visits}</b><small>訪問</small></div>
+      <div><b style="color:var(--mint)">${P.won}</b><small>成約</small></div>
       <div><b>${(state.schedules||[]).filter(s=>s.date===todayStr(0)&&!s.done).length}</b><small>今日の残予定</small></div>
     </div>
-    <div class="sec-label">結果の内訳</div>
-    ${bars(byResult,maxR,k=>rc[k]||"#3D5AFE")||'<div class="empty" style="padding:16px">データなし</div>'}
-    ${Object.keys(byProd).length?`<div class="sec-label">商材別 成約数</div>${bars(byProd,Math.max(1,...Object.values(byProd)),k=>prodColor[k]||"#9AA4BC")}`:""}
-    <div class="sec-label">メンバー別 訪問数</div>
-    ${bars(byMember,maxM,k=>memberColor(null,k))||'<div class="empty" style="padding:16px">データなし</div>'}
+    <div class="sec-label">成約ランキング（${PERIODS.find(x=>x[0]===statsPeriod)[1]}）</div>
+    ${rankHtml}
+    ${prodRows.length?`<div class="sec-label">商材別 成約数</div>${prodHtml}`:""}
     <div class="btnrow"><button class="btn sec" onclick="exportVisitsCsv()">CSV出力</button><button class="btn pri" onclick="closeSheet()">閉じる</button></div>`);
 }
 function exportVisitsCsv(){
@@ -1976,7 +2168,9 @@ async function saveVisit(pinId){
   closeSheet();
   try{
     await api(payload);
-    toast("訪問を記録しました"); tick();
+    rankData=null;   // ランキングを次回開いたとき最新に
+    toast(visitResultSel==="成約"?"訪問を記録しました（🎉実績速報をチャットに自動投稿）":"訪問を記録しました");
+    tick();
   }catch(e){
     if(e.message==="未接続"||/認証/.test(e.message)){ toast("記録に失敗: "+e.message); return; }
     outboxPush(payload);
@@ -2158,7 +2352,7 @@ function toggleDemo(){
     srv=DEMO.settings; updateChatVisibility();
     document.getElementById("bulkBtn").style.display="";
     toast("デモモード開始（あなた＝管理者）"); }
-  else { document.getElementById("demoBanner").style.display="none"; state={members:[],pins:[],visits:[],schedules:[],products:[]}; chatMap.clear(); renderAll();
+  else { document.getElementById("demoBanner").style.display="none"; state={members:[],pins:[],visits:[],schedules:[],products:[],shifts:[]}; chatMap.clear(); renderAll();
     if(!cfg.token){ openSetup(); } toast("デモモード終了"); }
   startLoop(); renderSettings();
 }
