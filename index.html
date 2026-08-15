@@ -303,6 +303,29 @@ html[data-theme="dark"] .rolebadge{background:#3A2F1A}
 #lightbox.open{display:flex}
 #lightbox img{max-width:94%;max-height:84%;border-radius:14px}
 #lightbox .lbdel{background:#FFECEE;color:var(--red);border-radius:14px;padding:10px 22px;font-weight:900;font-size:13px}
+/* ===== パスワードゲート（確認用） ===== */
+#gate{position:fixed;inset:0;z-index:200;background:var(--bg);display:none;align-items:center;justify-content:center;padding:24px}
+#gate.open{display:flex}
+.gatebox{width:100%;max-width:360px;background:var(--card);border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow);padding:34px 26px 26px;text-align:center}
+.gatebox .logo{width:54px;height:54px;border-radius:16px;background:var(--pri-bg);color:var(--pri-fg);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;margin:0 auto 14px}
+.gatebox h1{font-size:20px;letter-spacing:.14em;font-weight:700}
+.gatebox p{font-size:12px;color:var(--sub);margin:6px 0 18px;font-weight:700}
+#gatePass{width:100%;border:1.5px solid var(--line);border-radius:14px;padding:12px 14px;background:var(--field);outline:none;text-align:center;font-size:18px;letter-spacing:.3em;font-weight:900}
+#gatePass:focus{border-color:var(--brand)}
+#gateBtn{width:100%;margin-top:12px;border-radius:14px;padding:13px;background:var(--pri-bg);color:var(--pri-fg);font-weight:800;font-size:14px}
+#gateErr{font-size:12px;color:var(--red);font-weight:800;margin-top:10px;min-height:16px}
+.gatebox.ng{animation:shake .4s}
+@keyframes shake{0%,100%{transform:none}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+
+/* ===== AIルート ===== */
+.ai-num{width:26px;height:26px;border-radius:50%;background:var(--c,#3D5AFE);border:2.5px solid #fff;color:#fff;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(16,24,40,.4)}
+.airow{display:flex;gap:9px;align-items:flex-start;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px;cursor:pointer}
+.airow:last-child{border-bottom:none}
+.airow .no{width:22px;height:22px;border-radius:50%;background:var(--chipbg);color:var(--ink);font-size:11px;font-weight:900;display:flex;align-items:center;justify-content:center;flex:0 0 auto;margin-top:1px}
+.airow .why{font-size:10.5px;color:var(--sub);font-weight:700}
+.aihead{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.aihead .av{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:15px;flex:0 0 auto}
+
 @media(min-width:760px){
   #nav{left:50%;right:auto;transform:translateX(-50%);width:580px}
   .panel-body,.searchbox,.tabseg{max-width:680px;margin-left:auto;margin-right:auto;width:100%}
@@ -332,6 +355,7 @@ html[data-theme="dark"] .rolebadge{background:#3A2F1A}
 <!-- マップ上ボタン -->
 <div class="mapbtns">
   <button class="fab glass" id="tileBtn" title="表示設定" onclick="openMapSettings()"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m4 12.8 8 4.5 8-4.5"/><path d="m4 16.6 8 4.5 8-4.5"/></svg></button>
+  <button class="fab glass" title="AIルート提案" onclick="openAiRoutes()"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.6 4.6 1.8-4.6 1.8L12 15.8l-1.8-4.6L5.6 9.4l4.6-1.8L12 3z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z"/></svg></button>
   <button class="fab glass" title="現在地へ" onclick="gotoMe()"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.4"/><circle cx="12" cy="12" r="8.2"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg></button>
   <button class="fab primary" title="スポット追加" onclick="addPinHere()"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
 </div>
@@ -398,6 +422,7 @@ html[data-theme="dark"] .rolebadge{background:#3A2F1A}
 <div class="panel" id="p-visits">
   <div class="panel-h"><h2>予定・訪問</h2><span class="cnt" id="visCnt">0</span>
     <span style="margin-left:auto;display:flex;gap:6px">
+      <button class="iconbtn" onclick="openAiRoutes()">🤖 AIルート</button>
       <button class="iconbtn" onclick="openStats()">集計</button>
       <button class="iconbtn" onclick="exportVisitsCsv()">CSV</button>
     </span></div>
@@ -426,6 +451,18 @@ html[data-theme="dark"] .rolebadge{background:#3A2F1A}
 <!-- 写真ライトボックス -->
 <div id="lightbox"><img id="lightboxImg" alt="" onclick="closeLightbox()"><button class="lbdel" id="lbDel" style="display:none" onclick="lbDelete()">この写真を削除</button></div>
 
+<!-- パスワードゲート（確認用ビルド） -->
+<div id="gate">
+  <div class="gatebox" id="gateBox">
+    <div class="logo">マ</div>
+    <h1>マワル MAP</h1>
+    <p>確認用ページです。パスワードを入力してください</p>
+    <input id="gatePass" type="password" placeholder="パスワード" autocomplete="off" autocapitalize="characters">
+    <button id="gateBtn" onclick="gateTry()">開く</button>
+    <div id="gateErr"></div>
+  </div>
+</div>
+
 <div id="toast"></div>
 <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none">
 
@@ -438,10 +475,13 @@ html[data-theme="dark"] .rolebadge{background:#3A2F1A}
          QRコード招待(読むだけで接続情報を自動入力) / OS共有でスポット送信
          成約率ドーナツ / 写真削除(管理者) / 全データCSV出力 / 進行方向表示
          1分ガイド内蔵
+   v7.1: AIルート提案(毎日メンバーごとの訪販ルートを自動作成・端末内計算)
+         法人マップで営業リストの店舗を自動可視化
+         確認用パスワードゲート
    バックエンド: Google Apps Script + スプレッドシート（Code.gs v4.0）
 ===================================================================== */
 
-const VERSION = "7.0";
+const VERSION = "7.1";
 const COLORS = ["#3D5AFE","#FF5252","#00C896","#FF9100","#7C4DFF","#00B0FF","#F50057","#607D8B"];
 const PIN_TYPES = {
   "顧客宅":{emoji:"🏠",color:"#FF6B6B"}, "店舗":{emoji:"🍽️",color:"#FF9F43"},
@@ -472,6 +512,33 @@ let cfg = Object.assign({
   candOn:false, candPrio:""
 }, JSON.parse(localStorage.getItem("mawaru_cfg")||"{}"));
 function saveCfg(){ localStorage.setItem("mawaru_cfg", JSON.stringify(cfg)); }
+
+/* =====================================================================
+   パスワードゲート（確認用ビルド: URLを知っていても合言葉が必要）
+   ・端末ごとに1回入力すれば以後は表示されない
+===================================================================== */
+const GATE_KEY="mawaru_gate_v1";
+(function(){
+  if(localStorage.getItem(GATE_KEY)==="ok") return;
+  document.getElementById("gate").classList.add("open");
+  const inp=document.getElementById("gatePass");
+  setTimeout(()=>{ try{ inp.focus(); }catch(e){} },150);
+  inp.addEventListener("keydown", e=>{ if(e.key==="Enter" && !e.isComposing) gateTry(); });
+})();
+function gateTry(){
+  // 全角入力(ＶＸ)も半角に正規化して判定
+  const v=(document.getElementById("gatePass").value||"").trim()
+    .replace(/[Ａ-Ｚａ-ｚ０-９]/g, c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).toUpperCase();
+  if(v==="VX"){
+    localStorage.setItem(GATE_KEY,"ok");
+    document.getElementById("gate").classList.remove("open");
+    toast("ようこそ！マワル MAP です");
+  }else{
+    const box=document.getElementById("gateBox");
+    document.getElementById("gateErr").textContent="パスワードが違います";
+    box.classList.remove("ng"); void box.offsetWidth; box.classList.add("ng");
+  }
+}
 // テーマ初期値の変更(v6): 「自動」既定をやめ、明示的に選んでいない人はライトに一度だけ移行
 if(!cfg._thm2){ if((cfg.theme||"auto")==="auto") cfg.theme="light"; cfg._thm2=1; saveCfg(); }
 
@@ -551,6 +618,7 @@ function applyServerPayload(j){
       onChatUpdated(false);
     }
     renderAll();
+    aiDailyNudge();
   }
   if(j.settings){
     srv = j.settings;
@@ -871,6 +939,7 @@ function initMap(){
   memberLayer=L.layerGroup().addTo(map);
   pinLayer=L.layerGroup().addTo(map);
   trailLayer=L.layerGroup().addTo(map);
+  aiLayer=L.layerGroup().addTo(map);
   map.on("contextmenu", e=>openPinForm(null, e.latlng.lat, e.latlng.lng));
   map.on("dragstart", ()=>{ followId=""; });
   // 大量ピン時: 地図移動のたびに画面内のピンだけを描き直す
@@ -1127,8 +1196,13 @@ function setArea(a){ areaFilter=a; renderPins(); renderPinList(); }
 function setCat(c){
   cfg.catFilter = (cfg.catFilter===c)? "" : c;   // 同じチップ再タップで解除=すべて表示
   saveCfg();
+  // 法人マップ: 営業リストの店舗ドットを自動ONにして、店舗を地図上で可視化
+  if(cfg.catFilter==="tob" && !cfg.candOn && candUrl()){
+    cfg.candOn=true; saveCfg();
+    if(!candAll) ensureCandidates();
+  }
   renderPins(); renderPinList(); renderCands(true);
-  toast(cfg.catFilter==="toc"?"個人宅マップ（ToC）を表示":cfg.catFilter==="tob"?"法人マップ（ToB）を表示":"すべて表示");
+  toast(cfg.catFilter==="toc"?"個人宅マップ（ToC）を表示":cfg.catFilter==="tob"?"法人マップ（ToB）: 店舗・取引先＋営業リストの店舗○を表示":"すべて表示");
 }
 function renderLegend(){
   const el=document.getElementById("legend");
@@ -1618,6 +1692,228 @@ function openRouteFor(ids){
   toast(`${order.length}件を近い順に並べてナビを開きました`);
 }
 
+/* =====================================================================
+   AIルート提案（毎日、メンバーごとの訪販ルートを自動作成）
+   ・ステータス／今日・期限切れの予定／前回の訪問結果／移動距離をスコア化
+   ・件数が少ない人から順に「スコア−距離ペナルティ」最大の訪問先を割当(公平)
+   ・計算はすべて端末内。顧客データを外部AIサービスへ送信しない
+===================================================================== */
+const AI_MAX_STOPS = 8;     // 1人あたり最大件数(Googleマップの経由地上限を考慮)
+const AI_KM_PENALTY = 7;    // 1kmあたりのスコア減点(遠回りを選びにくくする)
+let aiLayer=null, aiRoutes=null, aiRoutesDate="", aiNotified=false;
+
+function aiLastVisitMap(){
+  const m=new Map();
+  (state.visits||[]).forEach(v=>{
+    const k=String(v.pinId), cur=m.get(k);
+    if(!cur || v.ts>cur.ts) m.set(k,v);
+  });
+  return m;
+}
+function aiScorePin(p, lastMap, schedMap){
+  if(p.status==="成約"||p.status==="NG") return null;
+  if(p.type==="拠点") return null;   // 事務所・集合場所は訪販先にしない
+  if(p.lat==null||p.lng==null) return null;
+  let score=0; const why=[];
+  const base={"再訪予定":50,"見込み":42,"対応中":30,"未訪問":22}[p.status||"未訪問"];
+  score += (base==null? 22 : base);
+  if(p.status==="再訪予定") why.push("再訪予定");
+  else if(p.status==="見込み") why.push("見込み");
+  const sc=schedMap.get(String(p.id));
+  if(sc){
+    if(sc.date<todayStr(0)){ score+=45; why.push("期限切れの予定"); }
+    else{ score+=40; why.push("今日の予定"); }
+  }
+  const lv=lastMap.get(String(p.id));
+  if(lv){
+    const days=(Date.now()-lv.ts)/86400e3;
+    if(days<0.8){ score-=60; why.push("本日訪問済"); }
+    else{
+      if(lv.result==="再訪約束"){ score+=28; why.push("再訪約束あり"); }
+      else if(lv.result==="不在"){ score+=14; why.push("前回不在"); }
+      if(days>=14){ score+=8; why.push(Math.floor(days)+"日ぶり"); }
+    }
+  }else if(!(p.visits>0)){ score+=6; why.push("未接触"); }
+  if(/在宅|約束|見込|検討/.test(p.memo||"")) score+=4;
+  return {pin:p, score, why};
+}
+function aiMemberStart(m){
+  if(m && m.lat!=null && m.lng!=null) return {lat:m.lat, lng:m.lng};
+  const base=state.pins.find(p=>p.type==="拠点" && p.lat!=null);
+  if(base) return {lat:base.lat, lng:base.lng};
+  if(myPos) return {lat:myPos.lat, lng:myPos.lng};
+  const c=map.getCenter(); return {lat:c.lat, lng:c.lng};
+}
+function aiBuildRoutes(){
+  const today=todayStr(0);
+  // 対象メンバー: 今日のシフト登録者を優先。シフト未設定なら全メンバー
+  const shiftNames=new Set((state.shifts||[]).filter(s=>s.date===today).map(s=>s.name));
+  let members=state.members.filter(m=> shiftNames.size? shiftNames.has(m.name) : true);
+  if(!members.length) members=state.members.slice();
+  // 位置共有OFF等で一覧に自分がいなくても、自分のルートは必ず作る
+  if(cfg.name && !members.some(m=>m.name===cfg.name) && (!shiftNames.size || shiftNames.has(cfg.name))){
+    members.unshift({id:"me", name:cfg.name, color:cfg.color, lat:myPos?myPos.lat:null, lng:myPos?myPos.lng:null});
+  }
+  if(!members.length && cfg.name) members=[{id:"me", name:cfg.name, color:cfg.color, lat:myPos?myPos.lat:null, lng:myPos?myPos.lng:null}];
+  if(!members.length) return null;
+  const seenNm=new Set();
+  members=members.filter(m=>{ if(!m.name||seenNm.has(m.name)) return false; seenNm.add(m.name); return true; });
+  // 自分を先頭に
+  members.sort((a,b)=>(b.name===cfg.name)-(a.name===cfg.name));
+
+  const lastMap=aiLastVisitMap();
+  const schedMap=new Map();
+  (state.schedules||[]).forEach(s=>{ if(!s.done && s.date<=today) schedMap.set(String(s.pinId), s); });
+
+  let cands=[];
+  state.pins.forEach(p=>{ const s=aiScorePin(p,lastMap,schedMap); if(s && s.score>0) cands.push(s); });
+  cands.sort((a,b)=>b.score-a.score);
+  if(cands.length>600) cands=cands.slice(0,600);   // 大量データ時の計算量ガード
+
+  const routes=members.map(m=>({member:{id:m.id,name:m.name,color:m.color}, stops:[], cur:aiMemberStart(m), start:aiMemberStart(m), km:0}));
+  // 1) 担当者つきの予定は、その担当のルートに固定
+  const pool=[];
+  cands.forEach(c=>{
+    const sc=schedMap.get(String(c.pin.id));
+    const r=(sc && sc.assignee)? routes.find(x=>x.member.name===sc.assignee) : null;
+    if(r && r.stops.length<AI_MAX_STOPS) r.stops.push(c);
+    else pool.push(c);
+  });
+  // 2) 残りは公平に(件数が少ない人の番から)、スコア−距離ペナルティ最大の先を割当
+  routes.forEach(r=>{ if(r.stops.length) r.cur={lat:r.stops[r.stops.length-1].pin.lat, lng:r.stops[r.stops.length-1].pin.lng}; });
+  let guard=0;
+  while(pool.length && guard++<3000){
+    const open=routes.filter(r=>r.stops.length<AI_MAX_STOPS);
+    if(!open.length) break;
+    const minLen=Math.min(...open.map(r=>r.stops.length));
+    const turn=open.filter(r=>r.stops.length===minLen);
+    let best=null;
+    turn.forEach(r=>{
+      pool.forEach((c,ci)=>{
+        const eff=c.score - dist(r.cur,c.pin)/1000*AI_KM_PENALTY;
+        if(!best || eff>best.eff) best={r,c,ci,eff};
+      });
+    });
+    if(!best || best.eff<=-30) break;   // どの候補も遠すぎ＆低スコアなら打ち切り
+    best.r.stops.push(best.c);
+    best.r.cur={lat:best.c.pin.lat, lng:best.c.pin.lng};
+    pool.splice(best.ci,1);
+  }
+  // 3) 各ルートを出発地点から近い順に並べ直し、移動距離を計算
+  routes.forEach(r=>{
+    const rest=r.stops.slice(), out=[];
+    let cur=r.start, km=0;
+    while(rest.length){
+      let bi=0, bd=Infinity;
+      rest.forEach((c,i)=>{ const d=dist(cur,c.pin); if(d<bd){bd=d;bi=i;} });
+      const n=rest.splice(bi,1)[0];
+      out.push(n); km+=bd/1000; cur=n.pin;
+    }
+    r.stops=out; r.km=km; delete r.cur;
+  });
+  return {date:today, routes};
+}
+function openAiRoutes(force){
+  const today=todayStr(0);
+  if(!state.pins.length && !cfg.demo && !connected()){ openSetup(); return; }
+  if(force || !aiRoutes || aiRoutesDate!==today){
+    aiRoutes=aiBuildRoutes(); aiRoutesDate=today;
+  }
+  localStorage.setItem("mawaru_ai_seen", today);
+  if(!aiRoutes){
+    openSheet(`<div class="sh-title">🤖 AIルート提案</div><div class="note">メンバー情報がまだありません。接続（またはデモモード）してからお試しください。</div>
+      <div class="btnrow"><button class="btn pri" onclick="closeSheet()">閉じる</button></div>`);
+    return;
+  }
+  const total=aiRoutes.routes.reduce((n,r)=>n+r.stops.length,0);
+  const cards=aiRoutes.routes.map((r,idx)=>{
+    const m=r.member;
+    const rows=r.stops.map((c,i)=>`
+      <div class="airow" onclick="closeSheet();openPinSheet(${c.pin.id})">
+        <span class="no">${i+1}</span>
+        <div style="flex:1;min-width:0">
+          <b>${esc(c.pin.name)}</b> ${statusTag(c.pin.status)}
+          <div class="why">${c.why.slice(0,3).map(esc).join(" ・ ")}${c.pin.area?` ・ ${esc(c.pin.area)}`:""}</div>
+        </div>
+      </div>`).join("");
+    return `<div class="card">
+      <div class="aihead">
+        <div class="av" style="background:${esc(m.color||'#3D5AFE')}">${esc((m.name||"?").slice(0,1))}</div>
+        <div style="flex:1;min-width:0"><b>${esc(m.name)}</b>${m.name===cfg.name?' <span class="tag" style="background:var(--chipbg);color:var(--brand)">あなた</span>':""}
+          <div style="font-size:11.5px;color:var(--sub);font-weight:700">${r.stops.length}件 ・ 移動約${r.km<1?Math.round(r.km*1000)+"m":r.km.toFixed(1)+"km"}</div></div>
+      </div>
+      ${rows||'<div class="empty" style="padding:10px 0">今日の割当なし</div>'}
+      ${r.stops.length?`<div class="btnrow" style="margin-bottom:0">
+        <button class="btn sec" onclick="aiShowOnMap(${idx})">地図で見る</button>
+        <button class="btn sec" onclick="aiNav(${idx})">ナビ</button>
+        <button class="btn pri" onclick="aiRegister(${idx})">予定に登録</button>
+      </div>`:""}
+    </div>`;
+  }).join("");
+  openSheet(`
+    <div class="sh-title">🤖 AIルート提案</div>
+    <div class="sh-sub">${schedDayLabel(today)}の訪販ルート ・ ${aiRoutes.routes.length}人に計${total}件を自動割当${(state.shifts||[]).some(s=>s.date===today)?"（今日のシフト登録者が対象）":""}</div>
+    ${total? cards : `<div class="empty"><div class="big">🤖</div>提案できる訪問先がありません<br><small style="font-weight:700">未訪問・見込み・再訪予定のスポットを登録すると毎日提案されます</small></div>`}
+    <div class="btnrow">
+      <button class="btn sec" onclick="openAiRoutes(true)">再生成</button>
+      <button class="btn pri" onclick="closeSheet()">閉じる</button>
+    </div>
+    <div class="note">🤖 再訪予定・見込みの優先度／今日と期限切れの予定／前回の訪問結果（再訪約束・不在）／移動距離をスコア化し、メンバーごとに近い順で自動作成します。毎日その日の最新状況から作り直されます。計算はすべてこの端末内で行い、顧客データを外部のAIサービスへ送信しません。</div>`);
+}
+function aiShowOnMap(idx){
+  const r=aiRoutes && aiRoutes.routes[idx];
+  if(!r || !r.stops.length) return;
+  closeSheet(); showView("map");
+  aiLayer.clearLayers();
+  const col=r.member.color||"#3D5AFE";
+  const pts=[[r.start.lat,r.start.lng], ...r.stops.map(c=>[c.pin.lat,c.pin.lng])];
+  L.polyline(pts,{color:col, weight:4, opacity:.8, dashArray:"2 9", lineCap:"round"}).addTo(aiLayer);
+  r.stops.forEach((c,i)=>{
+    L.marker([c.pin.lat,c.pin.lng],{icon:L.divIcon({className:"", iconSize:[26,26], iconAnchor:[13,13],
+      html:`<div class="ai-num" style="--c:${col}">${i+1}</div>`}), zIndexOffset:800})
+      .on("click",()=>openPinSheet(c.pin.id)).addTo(aiLayer);
+  });
+  map.fitBounds(pts,{padding:[70,70]});
+  toast(`🤖 ${r.member.name}さんのAIルート（${r.stops.length}件・番号順）— 地図タップで消去`);
+  map.once("click",()=>aiLayer.clearLayers());
+}
+function aiNav(idx){
+  const r=aiRoutes && aiRoutes.routes[idx];
+  if(!r || !r.stops.length) return;
+  const o=myPos || map.getCenter();
+  const pts=r.stops.map(c=>c.pin);
+  const dest=pts[pts.length-1];
+  const wps=pts.slice(0,-1).map(p=>p.lat+","+p.lng).join("|");
+  const url=`https://www.google.com/maps/dir/?api=1&origin=${o.lat},${o.lng}&destination=${dest.lat},${dest.lng}&travelmode=driving${wps?`&waypoints=${encodeURIComponent(wps)}`:""}`;
+  window.open(url,"_blank","noopener");
+  toast(`AIルート${pts.length}件の順でナビを開きました`);
+}
+async function aiRegister(idx){
+  const r=aiRoutes && aiRoutes.routes[idx];
+  if(!r || !r.stops.length) return;
+  const today=todayStr(0);
+  const existing=new Set((state.schedules||[]).filter(s=>s.date===today).map(s=>String(s.pinId)+"|"+(s.assignee||"")));
+  toast("予定に登録中…");
+  let n=0;
+  for(const c of r.stops){
+    if(existing.has(String(c.pin.id)+"|"+r.member.name)) continue;
+    try{ await api({action:"sched_add", pinId:c.pin.id, date:today, assignee:r.member.name}); n++; }
+    catch(e){}
+  }
+  closeSheet();
+  toast(n? `${r.member.name}さんの今日の予定に${n}件を登録しました` : "すべて登録済みでした");
+  await tick();
+  showView("visits"); setVisTab("sched");
+}
+function aiDailyNudge(){
+  if(aiNotified) return;
+  if(!state.pins.length || !state.members.length) return;
+  const today=todayStr(0);
+  aiNotified=true;
+  if(localStorage.getItem("mawaru_ai_seen")===today) return;
+  setTimeout(()=>toast("🤖 今日のAIルート提案ができました（右の✨ボタン、または予定・訪問→AIルート）"), 1800);
+}
+
 /* ---------- 一括取込 ---------- */
 let bulkCancel=false;
 function openBulkImport(){
@@ -1735,10 +2031,10 @@ function renderSchedList(el){
   }
   const today=todayStr(0);
   const todayMineUndone = list.filter(s=>s.date===today && !s.done).map(s=>s.pinId);
-  let html="";
-  if(todayMineUndone.length){
-    html+=`<div class="btnrow" style="margin:2px 0 10px"><button class="btn pri" onclick='openRouteFor(${JSON.stringify(todayMineUndone)})'>今日の残り${todayMineUndone.length}件でルート作成</button></div>`;
-  }
+  let html=`<div class="btnrow" style="margin:2px 0 10px">
+    <button class="btn sec" onclick="openAiRoutes()">🤖 AIルート提案</button>
+    ${todayMineUndone.length?`<button class="btn pri" onclick='openRouteFor(${JSON.stringify(todayMineUndone)})'>今日の残り${todayMineUndone.length}件でルート作成</button>`:""}
+  </div>`;
   const dates=[...new Set(list.map(s=>s.date))].sort();
   dates.forEach(d=>{
     const items=list.filter(s=>s.date===d);
@@ -2297,6 +2593,7 @@ function openGuide(){
     <div class="feat">地図を長押し or ＋ボタンで訪問先を登録（写真・メモも）</div>
     <div class="feat">訪問したらスポットを開いて「訪問を記録」（予定も自動で✓）</div>
     <div class="feat">「予定・訪問」タブに今日やることが並びます</div>
+    <div class="feat">🤖 AIルート提案が毎日、メンバーごとの訪問ルートを自動作成</div>
     <div class="feat">予定の「ルート作成」で近い順にナビが起動</div>
     <div class="feat">チャットで現在地やスポットをそのまま共有</div>
     <div class="feat">休憩中は設定の「一時停止」で共有だけ止められます</div>
