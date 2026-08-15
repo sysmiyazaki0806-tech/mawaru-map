@@ -1,7 +1,7 @@
 /* マワル MAP service worker v3
    - アプリ本体: network-first（常に最新、オフライン時のみキャッシュ）
    - 地図タイル・Leaflet: cache-first＋上限つき（圏外でも直近の地図が見える） */
-const CACHE = "mawaru-v9";
+const CACHE = "mawaru-v10";
 const TILE_CACHE = "mawaru-tiles-v1";
 const TILE_MAX = 400;
 const CORE = ["./index.html", "./manifest.webmanifest", "./icon.svg"];
